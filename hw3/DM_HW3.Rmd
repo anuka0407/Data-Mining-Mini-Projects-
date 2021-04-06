@@ -3,7 +3,7 @@ title: "Data_Mining_HW3"
 author: "Anuka Revi"
 date: "3/29/2021"
 output:
- md_document: default
+ github_document: default
   
 ---
 

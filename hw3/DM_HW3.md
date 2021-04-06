@@ -1,5 +1,9 @@
-**Q1 - What Causes What?**
-==========================
+Data\_Mining\_HW3
+================
+Anuka Revi
+3/29/2021
+
+# **Q1 - What Causes What?**
 
 1.  When we try to understand how more cops in the street affect crime,
     we run into the problem of correlation vs causation: Do more cops
@@ -35,7 +39,7 @@
 
 4.  The model researchers are trying to estimate is linear model with
     interactions with crimes incidents in the first police district and
-    in other districts. &gt;Based on figure 2, daily total number of
+    in other districts. \>Based on figure 2, daily total number of
     crimes in D.C. decreased by 2.621 in District 1 and the effects is
     significant, but it only decreased by 0.571 in other districts
     (effect is not significant). This makes sense since increased police
@@ -43,10 +47,9 @@
     strengthens the causality effect of increased police on reduced
     crime rate.
 
-*C**r**i**m**e* = *b*<sub>0</sub> + *b*<sub>1</sub> \* (*H**i**g**h**A**l**e**r**t* \* *D**i**s**t**r**i**c**t*<sub>1</sub>) + *b*<sub>2</sub> \* (*H**i**g**h**A**l**e**r**t* \* *D**i**s**t**r**i**c**t*<sub>0</sub>) + *b*<sub>3</sub> \* *l**o**g*(*m**i**d**d**a**y*<sub>*r*</sub>*i**d**e**r**s**h**i**p*) + *e*
+\(Crime=b_0+b_1*(HighAlert*District_1)+b_2*(High Alert*District_0)+b_3*log(midday_ridership)+e\)
 
-**Q2 - Predictive Model Building: Green Certification**
-=======================================================
+# **Q2 - Predictive Model Building: Green Certification**
 
 In this project, we are trying to build the best predictive model for
 revenue per square foot per calendar year (prediction target:
@@ -85,21 +88,20 @@ In conclusion, Random Forest model that includes *“age”, “size”,
 “stories”, “city\_market\_rent”, “amenities”, “cs\_property\_id”,
 “class\_a”, “class\_b”, “cd\_total\_07”,
 “electricity\_costs”,“renovated”, “cluster”, “precipitation”,
-“empl\_gr”, “green\_certified”,“rev\_sqft\_yr”* is a good predictor for
-the revenue per square foot per year.
+“empl\_gr”, “green\_certified”,“rev\_sqft\_yr”* is a good predictor
+for the revenue per square foot per year.
 
-![Figure1](DM_HW3_files/figure-markdown_strict/unnamed-chunk-2-1.png)
+![Figure1](DM_HW3_files/figure-gfm/unnamed-chunk-2-1.png)
 
-![Figure2](DM_HW3_files/figure-markdown_strict/unnamed-chunk-5-1.png)
+![Figure2](DM_HW3_files/figure-gfm/unnamed-chunk-5-1.png)
 
-![Figure3](DM_HW3_files/figure-markdown_strict/unnamed-chunk-7-1.png)
+![Figure3](DM_HW3_files/figure-gfm/unnamed-chunk-7-1.png)
 
     ## [1] 2409.763
 
-![Figure4](DM_HW3_files/figure-markdown_strict/unnamed-chunk-8-1.png)
+![Figure4](DM_HW3_files/figure-gfm/unnamed-chunk-8-1.png)
 
-**Q3 - Predictive Model Building: California Housing**
-======================================================
+# **Q3 - Predictive Model Building: California Housing**
 
 In this project we are trying to build the best predictive model for
 medianHouseValue for California Housing. The data in CAhousing.csv
@@ -136,70 +138,130 @@ most of the prices for inland housing in California. We do have under
 estimated prices along the shores around Los Angeles and San Diego &
 overestimated around Santa Barbara.
 
-![Fig1](DM_HW3_files/figure-markdown_strict/California%20Map-1.png)
+![Fig1](DM_HW3_files/figure-gfm/California%20Map-1.png)
 
 <table>
+
 <thead>
+
 <tr>
+
 <th style="text-align:left;">
+
 </th>
+
 <th style="text-align:center;">
+
 Total.Predictors
+
 </th>
+
 <th style="text-align:right;">
+
 AIC
+
 </th>
+
 <th style="text-align:center;">
+
 Adj.R.Squared
+
 </th>
+
 </tr>
+
 </thead>
+
 <tbody>
+
 <tr>
+
 <td style="text-align:left;">
+
 Full Model
+
 </td>
+
 <td style="text-align:center;">
+
 9
+
 </td>
+
 <td style="text-align:right;">
+
 368297.4
+
 </td>
+
 <td style="text-align:center;">
+
 0.6350148
+
 </td>
+
 </tr>
+
 <tr>
+
 <td style="text-align:left;">
+
 Two-Way Int. Model
+
 </td>
+
 <td style="text-align:center;">
+
 37
+
 </td>
+
 <td style="text-align:right;">
+
 366161.5
+
 </td>
+
 <td style="text-align:center;">
+
 0.6798397
+
 </td>
+
 </tr>
+
 <tr>
+
 <td style="text-align:left;">
+
 Three-Way Int. Model
+
 </td>
+
 <td style="text-align:center;">
+
 93
+
 </td>
+
 <td style="text-align:right;">
+
 365312.5
+
 </td>
+
 <td style="text-align:center;">
+
 0.6969088
+
 </td>
+
 </tr>
+
 </tbody>
+
 </table>
 
-![fig2](DM_HW3_files/figure-markdown_strict/unnamed-chunk-16-1.png)
+![fig2](DM_HW3_files/figure-gfm/unnamed-chunk-16-1.png)
 
-![Fig3](DM_HW3_files/figure-markdown_strict/unnamed-chunk-18-1.png)
+![Fig3](DM_HW3_files/figure-gfm/unnamed-chunk-18-1.png)
