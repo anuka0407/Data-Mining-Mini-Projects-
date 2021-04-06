@@ -1,0 +1,3 @@
+"0","#log housevalue"
+"0","step_twoway_mod_finish_aic_log = lm(formula=log(medianHouseValue)~(.)^2, data=CAhousing_train)"
+"0","diagnostics(step_twoway_mod_finish_aic_log)"

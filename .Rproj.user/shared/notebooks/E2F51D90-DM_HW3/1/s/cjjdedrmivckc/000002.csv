@@ -1,0 +1,8 @@
+"0","full_model = lm(medianHouseValue ~ ., data = CAhousing_train)"
+"0","full_model_adjr2 = summary(full_model)$adj.r.squared"
+"0",""
+"0","full_twoway_model = lm(medianHouseValue ~ (.)^2, data = CAhousing_train)"
+"0","full_twoway_adjr2 = summary(full_twoway_model)$adj.r.squared"
+"0",""
+"0","full_threeway_model = lm(medianHouseValue ~ (.)^3, data = CAhousing_train)"
+"0","full_threeway_adjr2 = summary(full_threeway_model)$adj.r.squared"

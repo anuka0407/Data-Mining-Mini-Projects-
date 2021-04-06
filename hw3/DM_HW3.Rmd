@@ -1,0 +1,594 @@
+---
+title: "Data_Mining_HW3"
+author: "Anuka Revi"
+date: "3/29/2021"
+output:
+ md_document: default
+  
+---
+
+```{r setup, include=FALSE}
+
+
+#Load All libraries
+knitr::opts_chunk$set(echo = FALSE, 
+                      cache = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+ 
+library(knitr)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(ggthemes)
+library(cowplot)
+library(moments)
+library(caret)
+library(glmnet)
+library(kableExtra)
+library(olsrr)
+library(ggmap)
+library(skimr)
+library(RColorBrewer)
+library(plotly)
+library(readr)
+library(caret)
+library(lmtest)
+library(nortest)
+library(scales)
+library(rsample)
+library(rpart)
+library(rpart.plot)
+library(pls) # for PCA 
+library(textir) #needed for standardizing data
+library(randomForest)
+library(modelr)
+library(purrr)
+
+```
+
+
+
+# **Q1 - What Causes What?**
+
+1. When we try to understand how more cops in the street affect crime, we run into the problem of correlation vs causation: Do more cops get assigned to high crime zones, or does presence of more cops decrease crime rate.(In other words: Is it a crime effect on size of police, are they simply correlated  or police effect on crime rate which explains causality)
+
+
+2. In order to isolate this effect researchers at Upenn tried to find example of having a lot of police for reasons unrelated to crime and they found that terrorism alert system in D.C. would work well for this experiment, since assigning larger size of police due to high terror alert level is unrelated to street crimes. This allowed them to look at the effect of larger size of police on street crime and helped them establish a causal relationship between more police and less crime in D.C. Specifically daily total # of crime goes down by 7.316 (unspecified units).Researchers also tried to see whether there are less tourists visiting D.C. on high terror alert days which would create fewer victims and decreased crime rate by looking at ridership level on the Metro system and they found that redirship was not dimisnihed on high terror days and that number of victims were largely unchanged - 6.046 (se of 2.537) decrease while controlling for metro ridership vs 7.316 (2.877) when not-controlling for the ridership. 
+
+
+
+3. They controlled for metro ridership to test fewer tourist hypothesis on high terrorism alert days in D.C.  If there were  decreased amount of tourists during high alert days, it would naturally create fewer victims and crimes and would weaken the causality of increased police size on decreased crime rate. Controlling for ridership diminished the effect (-6.046 vs -7.316) slight but the effect remained statistically significant. 
+
+
+
+4. The model researchers are trying to estimate is linear model with interactions with crimes incidents in the first police district and in other districts. >Based on figure 2, daily total number of crimes in D.C. decreased by 2.621 in District 1 and the effects is significant, but it only decreased by 0.571 in other districts (effect is not significant). This makes sense since increased police force is used in District 1 on high alert days, which again strengthens the causality effect of increased police on reduced crime rate. 
+
+$Crime=b_0+b_1*(HighAlert*District_1)+b_2*(High Alert*District_0)+b_3*log(midday_ridership)+e$
+
+
+
+
+
+
+# **Q2 - Predictive Model Building: Green Certification**
+
+
+In this project, we are trying to build the best predictive model for revenue per square foot per calendar year (prediction target: rev_sqft_year given its features such as size, age, class, renovation and so on), and to use this model to quantify the average change in rental income per square foot associated with green certification, holding all else fixed. We will use RMSE as the evaluation metric as we will be using Random Forest model which is immune to outliers. 
+
+I use Random forests because it is easy to prepare, requires no scaling or normalization for categorical, numerical or binary features & it is a good indicator of the most important features. 
+
+Fig1 shows the distribution for *revenue / sq.ft.* variable for green vs non-green buildings. There are more non-green buildings than green buildings within each revenue category and the distribution is skewed to the right.   
+
+Simple Random forest model I used includes all variables and has RMSE of on the test data that is 734. This is the number we want to improve on (make lower) by feature engineering.
+
+Fig2 shows relative importance of each feature in calculating revenue per square foot per calendar year. We observe that the most important characteristics of revenue per sq foot/year are age and size; size makes intuitive sense since bigger space translates into higher price. Based on the fig 2, I decided to include variables that are at least 10 and up on importance (X scale of fig2). 
+
+Using above selection renders a better prediction results. Test set RMSE is 697 which is lower than the initial model. Figure 3 shows the relative importance of the updated model that better predicts the revenue per square foot and figure 4 plots predicted vs actual outcomes. 
+
+In conclusion,  Random Forest model that includes *"age", "size", "stories", "city_market_rent", "amenities", "cs_property_id", "class_a", "class_b",
+"cd_total_07", "electricity_costs","renovated", "cluster", "precipitation", "empl_gr", "green_certified","rev_sqft_yr"* is a good predictor for the revenue per square foot per year.  
+
+```{r, include=FALSE}
+
+#load data 
+greenbuildings <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/greenbuildings.csv")
+
+#create new variable = revenue /sqft/yr and collapse green rating into one category 
+green_build<-greenbuildings %>%
+  janitor::clean_names()%>%
+  mutate(rev_sqft_yr=rent*leasing_rate,green_certified = if_else(green_rating == 1, "Green", "Non-green"))
+
+
+skim(green_build)
+
+# we see that there are 74 missing variables in empl-gr category 
+```
+
+
+```{r, fig.cap="Figure1"}
+#visualize 
+# Histogram of revenue per sq. foot :
+ggplot(green_build, aes(x = rev_sqft_yr)) +
+  geom_vline(aes(xintercept = mean(rev_sqft_yr)),color = "red", linetype = 2) +xlim(0,12000)+
+  geom_histogram(color = "black", bins=40, fill="gray") +
+  labs(x = "revenue/Sq.Ft/Year", title = "Distribution of Revenue per Square Foot for Green vs Non-Green Buildings")+facet_wrap(.~green_certified)
+
+
+```
+
+
+```{r, include=FALSE}
+
+#train test split
+set.seed(420)
+green_split <- initial_split(green_build, strata = rev_sqft_yr)
+green_train <- training(green_split)
+green_test <- testing(green_split)
+
+
+#take care of missing var probem in empl_
+mean(green_build$empl_gr,na.rm=TRUE)
+
+green_build$empl_gr[is.na(green_train$empl_gr)] <- 3.21
+
+green_train$empl_gr[is.na(green_train$empl_gr)] <- 3.21
+
+
+# Check missing values . Identify the columns which have missing values 
+mvc = 0
+for (i in 1:ncol(green_train))
+{
+  m = sum(is.na(green_train[,i]))
+  print(paste("Column ",colnames(green_train[i])," has ",m," missing values"))
+  if(m>0){
+    mvc = mvc+1
+  }
+  else{
+    mvc
+    }
+}  
+print(paste("Dataset has overall ",mvc," columns with missing values"))
+
+
+```
+
+
+```{r, include=FALSE}
+#cteate initial model of Random Forest
+#I have to eliminate leasing rate and rent
+set.seed(1000)
+output.forest <- randomForest(rev_sqft_yr ~ cs_property_id+cluster+
+                                size+empl_gr+stories+age+renovated+class_a+
+                                class_b+leed+energystar+green_rating+net+
+                                amenities+cd_total_07+hd_total07+total_dd_07+
+                                precipitation+gas_costs+electricity_costs+
+                                city_market_rent+green_certified,
+                              data = green_train, importance = T)
+
+#compute RMSE on a train set
+modelr::rmse(output.forest, green_train)
+#rmse of test data
+modelr::rmse(output.forest, green_test)
+#734
+
+
+# value is [1] 734.2972
+
+#important feautures in determining rev_sqrt_ft
+print(output.forest)
+importance(output.forest)
+
+importance    <- importance(output.forest)
+varImportance <- data.frame(Variables = row.names(importance), 
+                            Importance = round(importance[ ,'%IncMSE'],2))
+
+# Create a rank variable based on importance
+rankImportance <- varImportance %>% mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+```
+
+
+
+```{r, fig.cap="Figure2"}
+
+# Use ggplot2 to visualize the relative importance of variables
+
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+                           y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = "Variables", title= "Variable Importance of Initial Model") +
+  coord_flip() + 
+  theme_few()
+```
+
+```{r, include=FALSE, cache=TRUE}
+#improving model 
+
+#create output forest 2 with most relevant variables (importance >=10)
+
+#new data - select importance>10
+
+
+green_build_new<-green_build%>%
+  select("age", "size", "stories", "city_market_rent", "amenities", "cs_property_id", "class_a", "class_b",
+                    "cd_total_07", "electricity_costs","renovated", "cluster", "precipitation", "empl_gr", "green_certified","rev_sqft_yr" )
+
+#check for missing values 
+skim(green_build_new)
+
+#train test split
+
+
+green_new_split=initial_split(green_build_new,strata = rev_sqft_yr)
+green_new_train=training(green_new_split)
+green_new_test=testing(green_new_split)
+
+set.seed(1000)
+
+#take care of missing var probem in empl_
+mean(green_build_new$empl_gr,na.rm=TRUE)
+
+green_build_new$empl_gr[is.na(green_build_new$empl_gr)] <- 3.22
+
+green_new_train$empl_gr[is.na(green_new_train$empl_gr)] <- 3.22
+
+## Check missing values again to Identify the columns which have missing values 
+mvc = 0
+for (i in 1:ncol(green_new_train))
+{
+  m = sum(is.na(green_new_train[,i]))
+  print(paste("Column ",colnames(green_new_train[i])," has ",m," missing values"))
+  if(m>0){
+    mvc = mvc+1
+  }
+  else{
+    mvc
+    }
+}  
+print(paste("Dataset has overall ",mvc," columns with missing values"))
+
+#0 missing values 
+
+
+#run Random Forest updated model
+output.forest2=randomForest(rev_sqft_yr ~ age+size+
+                                stories+city_market_rent+amenities+
+                              cs_property_id+class_a+class_b+cd_total_07+
+                                electricity_costs+renovated+cluster+
+                                precipitation+empl_gr+green_certified,
+                              data = green_new_train, importance = T)
+
+modelr::rmse(output.forest2, green_new_test)
+#the value i get is around 697
+
+#important features in determining rev_sqrt_ft
+print(output.forest2)
+importance(output.forest2)
+
+importance    <- importance(output.forest2)
+varImportance <- data.frame(Variables = row.names(importance), 
+                            Importance = round(importance[ ,'%IncMSE'],2))
+
+# Create a rank variable based on importance
+rankImportance <- varImportance %>% mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+
+```
+
+
+```{r, fig.cap="Figure3"}
+# Use ggplot2 to visualize the relative importance of  variables
+#on updated model
+
+
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+                           y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables', title = "Plot of Variable Importance on Updated Model") +
+  coord_flip() + 
+  theme_few()
+
+```
+
+
+```{r, fig.cap="Figure4"}
+#predictions on test data
+fitForest2 <-predict(output.forest2, newdata = green_new_test)
+
+
+
+first_SSE <- mean((fitForest2-green_new_test$rev_sqft_yr)^2)
+mean(green_new_train$rev_sqft_yr)
+plot(fitForest2,green_new_test$rev_sqft_yr,
+     xlab="predicted",ylab="actual", xaxt="n", title="Predictions")
+abline(a=0,b=1)
+
+```
+
+```{r, include=FALSE}
+# Further improvement to the model
+# Lets separate continous variables and check their correlation with sale price
+
+num <- sapply(green_new_train, is.numeric)
+
+
+#train test for numerical and categorical 
+green_train_num <-  green_new_train[ , num]
+green_train_cat <- green_new_train[ , !num]
+
+correlations <- cor(green_train_num)
+
+# correlations
+row_indic <- apply(correlations, 1, function(x) sum(x > 0.3 | x < -0.3) > 1)
+
+correlations<- correlations[row_indic ,row_indic ]
+
+#detected high (over0.7)correlation between city rent and rev_sqft_yr  that can be in the way of Random Forest more accurate predictions.
+library(ggpubr)
+#high correlations 
+ggscatter(green_train_num,x="city_market_rent",y="rev_sqft_yr",
+          add="reg.line", conf.int=TRUE,cor.coef=TRUE,corr.method="pearson")
+
+
+          
+```
+
+```{r, include=FALSE}
+#try this model 
+output.forest.final=randomForest(rev_sqft_yr ~ age+size+
+                                stories+amenities+
+                              cs_property_id+class_a+class_b+cd_total_07+
+                                electricity_costs+renovated+cluster+
+                                precipitation+empl_gr+green_certified,
+                              data = green_new_train, importance = T)
+
+modelr::rmse(output.forest.final, green_new_test)
+#rmse 740
+
+#I decided that I am keeping output.model.2 as my final model since dropping market_rent variable actually increases RMSE on test set. I believe market rent variable is important in predicting revenue of the sq ft since more expensive neighborhoods have higher rental and increases overall revenue. 
+
+```
+
+
+
+
+
+
+
+
+# **Q3 - Predictive Model Building: California Housing**
+
+In this project we are trying to build the best predictive model for medianHouseValue for California Housing. The data in CAhousing.csv containts data at the census-tract level on residential housing in the state of California. Each row is a census tract, and the columns are as follows: longitude, latitude, housingMedianAge, population, households, totalRooms, totalBedrooms, medianIncome & median house value. I will be using forward_backward stepwise model with model selection criteria AIC and adj. R^2. We are trying to minimize AIC and maximize R-squared to get the best model. 
+
+Fig1 below displaces a plot of the original data, using a color scale to show medianHouseValue versus longitude (x) and latitude (y). Map shows that houses located inland have lower median house value, while coastal houses have higher values. Also around cities like Los Angeles and Santa Cruz houses attain the given maximum value of $500 000.
+
+Table1 shows that out of 3 initial models (linear models using all variables, 2-way interactions and 3-way interactions) the best (lowest) AIC score was for a 3-way interaction model, however this model has 93 coefficients that makes a very complex model. To mitigate complexity we used stepwise selection for a 2-way model as our final model for price predictions since it has far lower coefficients (33 vs 93) and only slighty worse performace to the 3-way model (only 0.23% decrease in AIC).
+
+In order to evaluate how well our  final model(step_2way_model) performs on test set data, we use the RMSE measures of errors, which gives us more accurate results. RMSE for the test set is 65296.4. Fig 2 shows the predicted house values vs longitude and latitude and fi3 shows the errors ( how much we underestimated or overestimated) the value. From the final map (fig3), we see that our model correctly estimated most of the prices for inland housing in California. We do have under estimated prices along the shores around Los Angeles and San Diego & overestimated around Santa Barbara. 
+
+
+```{r, include=FALSE }
+CAhousing <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/CAhousing.csv")
+dim<-dim(CAhousing)
+dim[1]
+dim[2]
+# we see that there are 20640 houses with 9 given characteristics
+
+#data cleaning
+skim(CAhousing)
+
+#By looking at data we see that there are no missing varialbes and data looks clean so we can start analysis.
+
+```
+
+
+```{r, California Map, fig.cap="Fig1"}
+#create map
+
+plot_map = ggplot(CAhousing, 
+                  aes(x = longitude, y = latitude, color = medianHouseValue, 
+                      hma = housingMedianAge, tr = totalRooms, tb = totalBedrooms,
+                      hh = households, mi=medianIncome)) +
+  geom_point(aes(size = population), alpha = 0.4) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_distiller(palette = "Paired", labels = comma) +
+  labs(color = "Median House Value (in $USD)", size = "Population")
+plot_map
+
+```
+
+
+
+```{r, include=FALSE}
+#Train test splits with X-validation
+set.seed(420)
+
+CAhousing_split=initial_split(CAhousing, prop=0.8,strata=medianHouseValue)
+
+CAhousing_train=training(CAhousing_split)
+CAhousing_test=testing(CAhousing_split)
+
+#Kfold
+CAhousing_folds=crossv_kfold(CAhousing_train, k=10)
+
+
+```
+
+
+
+
+
+
+
+```{r model selection, include=FALSE}
+
+# As a starting point I create 3 initial models that will be fitted on our training data. First model uses all the variables, the second one uses two-way interactions between all the variables & third one uses 3 way interactions.
+
+
+full_model = lm(medianHouseValue ~ ., data = CAhousing_train)
+full_model_adjr2 = summary(full_model)$adj.r.squared
+
+full_twoway_model = lm(medianHouseValue ~ (.)^2, data = CAhousing_train)
+full_twoway_adjr2 = summary(full_twoway_model)$adj.r.squared
+
+full_threeway_model = lm(medianHouseValue ~ (.)^3, data = CAhousing_train)
+full_threeway_adjr2 = summary(full_threeway_model)$adj.r.squared
+```
+
+
+
+```{r, caption="Table1"}
+beginning_mods_results = data.frame(
+  "Total Predictors" =
+    c("Full Model" = extractAIC(full_model)[1],
+      "Two-Way Int. Model" = extractAIC(full_twoway_model)[1],
+      "Three-Way Int. Model" = extractAIC(full_threeway_model)[1]),
+  "AIC" =
+    c("Full Model" = extractAIC(full_model)[2],
+      "Two-Way Int. Model" = extractAIC(full_twoway_model)[2],
+      "Three-Way Int. Model" = extractAIC(full_threeway_model)[2]),
+  "Adj R-Squared" =
+    c("Full Model" = full_model_adjr2,
+      "Two-Way Int. Model" = full_twoway_adjr2,
+      "Three-Way Int. Model" = full_threeway_adjr2))
+
+kable(beginning_mods_results, align = c("c", "r"))
+```
+
+
+
+
+
+
+```{r, echo=FALSE, cache=TRUE, include=FALSE}
+#All three of this candidates are good for stepwise selection but since three way model was the best one, i will just use forward selection of a simple model and two-way model stepwise selection and compare AIC of stewise models to the initial 3-way interaction model.I will choose the one that has the lowest AIC value.
+
+#the most basic model with only intercept 
+lm0=lm(medianHouseValue~1, data=CAhousing_train)
+#full_model AIC vs BIC
+step_basic_mod_finish_aic =  stats::step(lm0, direction = "forward", scope=~(longitude+latitude+housingMedianAge+totalRooms+totalBedrooms+population+
+                                            households+medianIncome+medianHouseValue)^2)
+
+#2way model AIC vs BIC
+step_twoway_mod_finish_aic = stats:: step(full_twoway_model, direction = "both", scope=~(.))
+
+#Stepwise selection took a while ( even though we only had 9 initial feautures). Below I am showing the variables(with their interaction) that are good at explaining medianHOuseValue.
+```
+
+
+
+```{r AIC  as data .frame, include=FALSE}
+
+
+aic_results = data.frame(
+  "AIC" =
+    c("Step" =
+        c("full" = extractAIC(step_basic_mod_finish_aic)[2],
+          "Two-Way" = extractAIC(step_twoway_mod_finish_aic)[2],
+           "Three-way" = extractAIC(full_threeway_model)[2])))
+ 
+
+kable(aic_results)
+
+length(coef(step_twoway_mod_finish_aic))
+length(coef(full_threeway_model))
+
+#3 way initial model still has the lowest AIC value compared to stepwise selection for lm0 (forward stepwise selection with scope of interaction variables) & 2-way stepwise model ("both" or forward backward stepwise selection). However, the model is far too complex with 93 coefficients compared to next best model which is 2-way stepwise selection with AIC Of 365312.5 but with only 33 coefficients. So there is a tradeoff between gaining slightly better performance (0.23%) and making the model way too complex (93 parameters compared to 33) for that reason I will continue working with stepwise 2_way model. (PS I tried a model with log(houseValue) but AIC was higher so I decided to not include that option)
+
+```
+
+
+
+```{r model coeffs, include=FALSE }
+getCall(step_twoway_mod_finish_aic)
+
+```
+
+
+```{r, include=FALSE}
+
+#this works 
+model_fit=lm(medianHouseValue ~ longitude + latitude + housingMedianAge + 
+    totalRooms + totalBedrooms + population + households + medianIncome + 
+    longitude:latitude + longitude:housingMedianAge + longitude:totalRooms + 
+    longitude:totalBedrooms + longitude:population + longitude:households + 
+    longitude:medianIncome + latitude:housingMedianAge + latitude:totalRooms + 
+    latitude:totalBedrooms + latitude:population + latitude:households + 
+    latitude:medianIncome + housingMedianAge:totalBedrooms + 
+    housingMedianAge:population + housingMedianAge:households + 
+    totalRooms:totalBedrooms + totalRooms:population + totalRooms:households + 
+    totalRooms:medianIncome + totalBedrooms:population + totalBedrooms:households + 
+    totalBedrooms:medianIncome + population:medianIncome, data =CAhousing_train)
+
+errors<-modelr::rmse(model_fit, CAhousing_test)
+print(errors)
+```
+
+```{r,fig.cap="fig2"}
+
+#predictions 
+predicts=predict(model_fit, CAhousing_test)
+
+plot_map = ggplot(CAhousing_test, 
+                  aes(x = longitude, y = latitude, color = predicts, 
+                      hma = housingMedianAge, tr = totalRooms, tb = totalBedrooms,
+                      hh = households, mi=medianIncome)) +
+  geom_point(aes(size = population), alpha = 0.4) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_distiller(palette = "Paired", labels = comma) +
+  labs(color = "Predicted House Value (in $USD)", size = "Population")
+plot_map
+
+
+
+
+```
+
+
+
+```{r}
+# the actual median house values from the test set
+test_actual = CAhousing_test$medianHouseValue
+# the predicted house values for the test set
+predicts=predict(model_fit, CAhousing_test)
+
+
+
+```
+
+
+
+```{r, fig.cap="Fig3"}
+plot_map = ggplot(CAhousing_test, 
+                  aes(x = longitude, y = latitude, 
+                      color = predicts - test_actual, 
+                      hma = housingMedianAge, tr = totalRooms, tb = totalBedrooms,
+                      hh = households, mi = medianIncome)) +
+              geom_point(aes(size = abs(predicts - test_actual)), alpha = 0.5) +
+              xlab("Longitude") +
+              ylab("Latitude") +
+              ggtitle("Predicted Price Over / Under Actual Price") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              scale_color_distiller(palette = "Paired", labels = comma) +
+              labs(color = "Predicted Price Over / Under (in $USD)", 
+                   size = "Magnitude of Price Difference")
+plot_map
+
+```
+ 
+ 
+ 
+
+
+
+
+

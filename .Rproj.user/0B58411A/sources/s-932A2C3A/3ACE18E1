@@ -1,0 +1,32 @@
+{
+    "id": "3ACE18E1",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1617250553179.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "expression": "green_build",
+        "caption": "green_build",
+        "totalObservations": 7894,
+        "displayedObservations": 7894,
+        "variables": 25,
+        "cacheKey": "041EA48B",
+        "object": "green_build",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=green_build&cache_key=041EA48B&max_cols=50",
+        "preview": 0
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1417254325432,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1617250553179,
+    "read_only": false,
+    "read_only_alternatives": []
+}

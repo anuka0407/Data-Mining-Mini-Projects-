@@ -1,0 +1,7 @@
+"0","# Obtain test set predictions data frame"
+"0","lm_results <- "
+"0","  lm_fit %>% "
+"0","  # save pred results"
+"0","  collect_predictions()"
+"2","Error in collect_predictions(.) : object 'lm_fit' not found
+"

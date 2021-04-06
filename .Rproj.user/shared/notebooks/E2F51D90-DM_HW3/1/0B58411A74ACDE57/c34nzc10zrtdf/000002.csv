@@ -1,0 +1,6 @@
+"0","greenbuildings <- read.csv(""C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/greenbuildings.csv"")"
+"0",""
+"0","#create new variable = revenue /sqft/yr and collapse green rating into one category "
+"0","greenbuildings%>%"
+"0","  janitor::clean_names()%>%"
+"0","  mutate(rev_sqft_yr=rent*leasing_rate,green_certified = if_else(green_rating == 1, ""Green"", ""Non-green""))"

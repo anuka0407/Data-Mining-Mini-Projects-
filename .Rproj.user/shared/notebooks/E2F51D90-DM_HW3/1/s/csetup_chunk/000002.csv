@@ -1,0 +1,17 @@
+"0","library(pls)
+"
+"2","package ‘pls’ was built under R version 4.0.4"
+"2","
+Attaching package: ‘pls’
+
+"
+"2","The following object is masked from ‘package:caret’:
+
+    R2
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    loadings
+
+"

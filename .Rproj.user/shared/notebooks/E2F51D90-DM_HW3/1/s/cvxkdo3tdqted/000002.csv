@@ -1,0 +1,6 @@
+"0","#visualize "
+"0","# Histogram of revenue per sq. foot :"
+"0","ggplot(green_build, aes(x = rev_sqft_yr)) +"
+"0","  geom_vline(aes(xintercept = mean(rev_sqft_yr)),color = ""red"", linetype = 2) +xlim(0,12000)+"
+"0","  geom_histogram(color = ""black"", bins=40, fill=""gray"") +"
+"0","  labs(x = ""revenue/Sq.Ft/Year"", title = ""Distribution of Revenue per Square Foot for Green vs Non-Green Buildings"")+facet_wrap(.~green_certified)"

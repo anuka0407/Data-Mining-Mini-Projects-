@@ -1,0 +1,7 @@
+"0","#visualize "
+"0","ggplot(data=greenbuildings)+geom_histogram(mapping=aes(x=rev_sqft_yr), bins = 40)+"
+"0","            geom_vline(aes(xintercept = mean(rev_sqft_yr)), "
+"0","             color = ""tomato"", linetype = 2) +"
+"0","   labs(x = ""Revenue per square foot (USD) per year"", y = ""Count"") "
+"2","Error in FUN(X[[i]], ...) : object 'rev_sqft_yr' not found
+"

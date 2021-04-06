@@ -1,0 +1,116 @@
+#Q3
+#Predictive model building: California housing
+# load libraries and import data set 
+library(knitr)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(ggthemes)
+library(cowplot)
+library(moments)
+library(caret)
+library(glmnet)
+library(kableExtra)
+library(olsrr)
+library(ggmap)
+library(skimr)
+
+
+
+CAhousing <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/CAhousing.csv")
+dim<-dim(CAhousing)
+dim[1]
+dim[2]
+# we see that there are 20640 houses with 9 given characteristics
+
+#data cleaning
+skim(CAhousing)
+head(CAhousing)
+
+#By looking at data we see that there are no missing varialbes and data looks clean
+#so we can start analysis.
+
+
+#map
+
+plot_map = ggplot(CAhousing, 
+                  aes(x = longitude, y = latitude, color = medianHouseValue, 
+                      hma = housingMedianAge, tr = totalRooms, tb = totalBedrooms,
+                      hh = households, mi=medianIncome)) +
+  geom_point(aes(size = population), alpha = 0.4) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Data Map - Longtitude vs Latitude and Associated Variables") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_distiller(palette = "Paired", labels = comma) +
+  labs(color = "Median House Value (in $USD)", size = "Population")
+plot_map
+
+# It is important to note that houses located inland have lower median house value, while coastal 
+#houses have higher values.
+
+------------------------------------------------------------------
+#Train test splits with X-validation
+set.seed(420)
+
+CAhousing_split=initial_split(CAhousing, prop=0.8,strata=medianHouseValue)
+
+CAhousing_train=training(CAhousing_split)
+CAhousing_test=testing(CAhousing_split)
+
+#vfold
+CAhousing_vfold=vfold_cv(CAhousing_train, v=10, strata=medianHouseValue)
+
+#Model Selection
+
+## STEPWISE MODEL 
+# 
+
+#create basic model you want to work with, since we only have 9 features I am going to 
+#use all of them with the combinations
+
+lm1=lm(medianHouseValue~., data=CAhousing_train)
+
+#let's create all OLS models with olsrr library
+ols_step=ols_step_all_possible(lm1)
+ols_step[which.max(ols_step$adjr),]
+
+#best linear model given by OLS step is
+best_linmod=lm(medianHouseValue~longitude+latitude+housingMedianAge+
+                 totalRooms+totalBedrooms+population+households+medianIncome,
+               data=CAhousing_train)
+
+#predict the result on test set
+yhat_CAhousing=predict(best_linmod, CAhousing_test)
+
+#Calculate RMSE
+testing.y=CAhousing_test$medianHouseValue
+best_linmode_rmse=sqrt(mean((yhat_CAhousing-testing.y)^2))
+#best_linmode_rmse
+#68896.26
+
+
+#plot actual vs predicted
+
+
+##KNN MODELwith k=100
+K_folds=10
+CAhousing_folds=crossv_kfold(CAhousing, k=K_folds)
+
+#map the model fitting fucntion over the training sets
+
+
+
+
+
+
+
+
+
+----------
+
+
+
+
+
+
