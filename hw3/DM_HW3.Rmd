@@ -44,6 +44,9 @@ library(textir) #needed for standardizing data
 library(randomForest)
 library(modelr)
 library(purrr)
+library(plotmo)
+library(pdp)
+
 
 ```
 
@@ -78,16 +81,22 @@ In this project, we are trying to build the best predictive model for revenue pe
 
 I use Random forests because it is easy to prepare, requires no scaling or normalization for categorical, numerical or binary features & it is a good indicator of the most important features. 
 
-Fig1 shows the distribution for *revenue / sq.ft.* variable for green vs non-green buildings. There are more non-green buildings than green buildings within each revenue category and the distribution is skewed to the right.   
+Fig1 shows the distribution for *revenue / sq.ft.* variable for green vs non-green buildings. There are more non-green buildings than green buildings within each revenue category and the distribution is skewed to the right. Simple Random forest model I used includes all variables and has RMSE of on the test data that is 7.34. 
 
-Simple Random forest model I used includes all variables and has RMSE of on the test data that is 734. This is the number we want to improve on (make lower) by feature engineering.
+Fig2 shows relative importance of each feature in calculating revenue per square foot per calendar year. We observe that the most important characteristics of revenue per sq foot/year are age and size; that makes intuitive sense since bigger space and newer building translate into higher rental price. Fig3A plots performance of the Random forest model as a function of iteration number and fig3B plots predicted vs actual outcomes. 
+We see that Random Forest model that includes all given features is not a bad predictor for revenue per square foot per year. 
 
-Fig2 shows relative importance of each feature in calculating revenue per square foot per calendar year. We observe that the most important characteristics of revenue per sq foot/year are age and size; size makes intuitive sense since bigger space translates into higher price. Based on the fig 2, I decided to include variables that are at least 10 and up on importance (X scale of fig2). 
 
-Using above selection renders a better prediction results. Test set RMSE is 697 which is lower than the initial model. Figure 3 shows the relative importance of the updated model that better predicts the revenue per square foot and figure 4 plots predicted vs actual outcomes. 
+Fig4 shows revenue per square foot for green vs non green buildings. As expected green buildings mean revenue per square foot is higher(around $
+27) compared to non-green buildings - which is around  $23.7.
+Partial Dependence is used to evaluate  marginal effect of change in rental income per square foot associated with green certification. PD gives us the relationship between green_certified and rev_sqft_yr taking into account the joint effect of other features. We see from the last table  that green and non-green buildings have similar effect on model prediction, that is around 24.509$ per square foot per year for green and 24.126 
+$ for non-green buildings. 
 
-In conclusion,  Random Forest model that includes *"age", "size", "stories", "city_market_rent", "amenities", "cs_property_id", "class_a", "class_b",
-"cd_total_07", "electricity_costs","renovated", "cluster", "precipitation", "empl_gr", "green_certified","rev_sqft_yr"* is a good predictor for the revenue per square foot per year.  
+
+
+
+
+
 
 ```{r, include=FALSE}
 
@@ -97,20 +106,21 @@ greenbuildings <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA M
 #create new variable = revenue /sqft/yr and collapse green rating into one category 
 green_build<-greenbuildings %>%
   janitor::clean_names()%>%
-  mutate(rev_sqft_yr=rent*leasing_rate,green_certified = if_else(green_rating == 1, "Green", "Non-green"))
+  mutate(rev_sqft_yr=(rent*leasing_rate)/100,green_certified = if_else(green_rating == 1, "Green", "Non-green"))
 
-
-skim(green_build)
+green_build$green_certified=factor(green_build$green_certified)
 
 # we see that there are 74 missing variables in empl-gr category 
 ```
+
+
 
 
 ```{r, fig.cap="Figure1"}
 #visualize 
 # Histogram of revenue per sq. foot :
 ggplot(green_build, aes(x = rev_sqft_yr)) +
-  geom_vline(aes(xintercept = mean(rev_sqft_yr)),color = "red", linetype = 2) +xlim(0,12000)+
+  geom_vline(aes(xintercept = mean(rev_sqft_yr)),color = "red", linetype = 2) +xlim(0,120)+
   geom_histogram(color = "black", bins=40, fill="gray") +
   labs(x = "revenue/Sq.Ft/Year", title = "Distribution of Revenue per Square Foot for Green vs Non-Green Buildings")+facet_wrap(.~green_certified)
 
@@ -118,7 +128,15 @@ ggplot(green_build, aes(x = rev_sqft_yr)) +
 ```
 
 
+
+
 ```{r, include=FALSE}
+#take care of missing var probem in empl_
+mean(green_build$empl_gr,na.rm=TRUE)
+
+green_build$empl_gr[is.na(green_build$empl_gr)] <- 3.21
+
+
 
 #train test split
 set.seed(420)
@@ -127,12 +145,8 @@ green_train <- training(green_split)
 green_test <- testing(green_split)
 
 
-#take care of missing var probem in empl_
-mean(green_build$empl_gr,na.rm=TRUE)
 
-green_build$empl_gr[is.na(green_train$empl_gr)] <- 3.21
-
-green_train$empl_gr[is.na(green_train$empl_gr)] <- 3.21
+#green_train$empl_gr[is.na(green_train$empl_gr)] <- 3.21
 
 
 # Check missing values . Identify the columns which have missing values 
@@ -170,7 +184,7 @@ output.forest <- randomForest(rev_sqft_yr ~ cs_property_id+cluster+
 modelr::rmse(output.forest, green_train)
 #rmse of test data
 modelr::rmse(output.forest, green_test)
-#734
+#7.3
 
 
 # value is [1] 734.2972
@@ -202,6 +216,8 @@ ggplot(rankImportance, aes(x = reorder(Variables, Importance),
   coord_flip() + 
   theme_few()
 ```
+
+
 
 ```{r, include=FALSE, cache=TRUE}
 #improving model 
@@ -260,8 +276,10 @@ output.forest2=randomForest(rev_sqft_yr ~ age+size+
                                 precipitation+empl_gr+green_certified,
                               data = green_new_train, importance = T)
 
+
+
 modelr::rmse(output.forest2, green_new_test)
-#the value i get is around 697
+#the value i get is around around8
 
 #important features in determining rev_sqrt_ft
 print(output.forest2)
@@ -274,12 +292,6 @@ varImportance <- data.frame(Variables = row.names(importance),
 # Create a rank variable based on importance
 rankImportance <- varImportance %>% mutate(Rank = paste0('#',dense_rank(desc(Importance))))
 
-```
-
-
-```{r, fig.cap="Figure3"}
-# Use ggplot2 to visualize the relative importance of  variables
-#on updated model
 
 
 ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
@@ -291,18 +303,28 @@ ggplot(rankImportance, aes(x = reorder(Variables, Importance),
   coord_flip() + 
   theme_few()
 
+
+#this model higher RMSE value around 8  so i wont pursue with it 
+
 ```
 
 
-```{r, fig.cap="Figure4"}
+
+```{r, fig.cap="figure3A"}
+#now I will move back to my initial output.forest model since it has lower RMSE value and plot performace as a function of iteration numbers
+plot(output.forest)
+
+```
+
+```{r, fig.cap="Figure3B", warning=FALSE}
 #predictions on test data
-fitForest2 <-predict(output.forest2, newdata = green_new_test)
+fitForest <-predict(output.forest, newdata = green_test)
 
 
 
-first_SSE <- mean((fitForest2-green_new_test$rev_sqft_yr)^2)
-mean(green_new_train$rev_sqft_yr)
-plot(fitForest2,green_new_test$rev_sqft_yr,
+first_SSE <- mean((fitForest-green_test$rev_sqft_yr)^2)
+mean(green_train$rev_sqft_yr)
+plot(fitForest,green_test$rev_sqft_yr,
      xlab="predicted",ylab="actual", xaxt="n", title="Predictions")
 abline(a=0,b=1)
 
@@ -312,12 +334,12 @@ abline(a=0,b=1)
 # Further improvement to the model
 # Lets separate continous variables and check their correlation with sale price
 
-num <- sapply(green_new_train, is.numeric)
+num <- sapply(green_train, is.numeric)
 
 
 #train test for numerical and categorical 
-green_train_num <-  green_new_train[ , num]
-green_train_cat <- green_new_train[ , !num]
+green_train_num <-  green_train[ , num]
+green_train_cat <- green_train[ , !num]
 
 correlations <- cor(green_train_num)
 
@@ -337,23 +359,42 @@ ggscatter(green_train_num,x="city_market_rent",y="rev_sqft_yr",
 ```
 
 ```{r, include=FALSE}
-#try this model 
-output.forest.final=randomForest(rev_sqft_yr ~ age+size+
-                                stories+amenities+
-                              cs_property_id+class_a+class_b+cd_total_07+
-                                electricity_costs+renovated+cluster+
-                                precipitation+empl_gr+green_certified,
-                              data = green_new_train, importance = T)
+# lets try to eliminate correlated var (city market rent) and estimate the new model
+output.forest.update=randomForest(rev_sqft_yr ~ cs_property_id+cluster+
+                                size+empl_gr+stories+age+renovated+class_a+
+                                class_b+leed+energystar+green_rating+net+
+                                amenities+cd_total_07+hd_total07+total_dd_07+
+                                precipitation+gas_costs+electricity_costs+
+                                +green_certified,
+                              data = green_train, importance = T)
 
-modelr::rmse(output.forest.final, green_new_test)
-#rmse 740
+modelr::rmse(output.forest.update, green_test)
+#rmse 7.5
 
-#I decided that I am keeping output.model.2 as my final model since dropping market_rent variable actually increases RMSE on test set. I believe market rent variable is important in predicting revenue of the sq ft since more expensive neighborhoods have higher rental and increases overall revenue. 
+#I decided that I am keeping initial output.forest as my final model since dropping market_rent variable actually increases RMSE on test set. This makes intuitive sense since  market rent variable is important in predicting revenue of the sq ft since more expensive neighborhoods have higher rental and increases overall revenue. 
+
+```
+
+```{r, fig.cap="Figure4"}
+ggmap<-ggplot(data = green_build) +
+  geom_pointrange(
+    mapping = aes(x=green_certified, y=rev_sqft_yr),
+    stat = "summary",
+    
+  )
+ggmap+labs(title="Distribution of Revenue per Square Foot for Green vs Non-Green Buildings")
+        
 
 ```
 
 
+```{r, fig.cap="Figure5"}
 
+
+
+p1=pdp::partial(output.forest, pred.var = "green_certified", plot.engine="ggplot2")
+kable(p1)
+```
 
 
 

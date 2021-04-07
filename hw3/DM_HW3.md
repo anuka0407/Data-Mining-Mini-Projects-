@@ -66,40 +66,95 @@ good indicator of the most important features.
 Fig1 shows the distribution for *revenue / sq.ft.* variable for green vs
 non-green buildings. There are more non-green buildings than green
 buildings within each revenue category and the distribution is skewed to
-the right.
-
-Simple Random forest model I used includes all variables and has RMSE of
-on the test data that is 734. This is the number we want to improve on
-(make lower) by feature engineering.
+the right. Simple Random forest model I used includes all variables and
+has RMSE of on the test data that is 7.34.
 
 Fig2 shows relative importance of each feature in calculating revenue
 per square foot per calendar year. We observe that the most important
-characteristics of revenue per sq foot/year are age and size; size makes
-intuitive sense since bigger space translates into higher price. Based
-on the fig 2, I decided to include variables that are at least 10 and up
-on importance (X scale of fig2).
+characteristics of revenue per sq foot/year are age and size; that makes
+intuitive sense since bigger space and newer building translate into
+higher rental price. Fig3A plots performance of the Random forest model
+as a function of iteration number and fig3B plots predicted vs actual
+outcomes. We see that Random Forest model that includes all given
+features is not a bad predictor for revenue per square foot per year.
 
-Using above selection renders a better prediction results. Test set RMSE
-is 697 which is lower than the initial model. Figure 3 shows the
-relative importance of the updated model that better predicts the
-revenue per square foot and figure 4 plots predicted vs actual outcomes.
-
-In conclusion, Random Forest model that includes *“age”, “size”,
-“stories”, “city\_market\_rent”, “amenities”, “cs\_property\_id”,
-“class\_a”, “class\_b”, “cd\_total\_07”,
-“electricity\_costs”,“renovated”, “cluster”, “precipitation”,
-“empl\_gr”, “green\_certified”,“rev\_sqft\_yr”* is a good predictor
-for the revenue per square foot per year.
+Fig4 shows revenue per square foot for green vs non green buildings. As
+expected green buildings mean revenue per square foot is higher(around $
+27) compared to non-green buildings - which is around
+\(23.7. Partial Dependence is used to evaluate marginal effect of change in rental income per square foot associated with green certification. PD gives us the relationship between green_certified and rev_sqft_yr taking into account the joint effect of other features. We see from the last table that green and non-green buildings have similar effect on model prediction, that is around 24.509\)
+per square foot per year for green and 24.126 $ for non-green buildings.
 
 ![Figure1](DM_HW3_files/figure-gfm/unnamed-chunk-2-1.png)
 
 ![Figure2](DM_HW3_files/figure-gfm/unnamed-chunk-5-1.png)
 
-![Figure3](DM_HW3_files/figure-gfm/unnamed-chunk-7-1.png)
+![figure3A](DM_HW3_files/figure-gfm/unnamed-chunk-7-1.png)
 
-    ## [1] 2409.763
+    ## [1] 2411.81
 
-![Figure4](DM_HW3_files/figure-gfm/unnamed-chunk-8-1.png)
+![Figure3B](DM_HW3_files/figure-gfm/unnamed-chunk-8-1.png)
+
+![Figure4](DM_HW3_files/figure-gfm/unnamed-chunk-11-1.png)
+
+<table>
+
+<thead>
+
+<tr>
+
+<th style="text-align:left;">
+
+green\_certified
+
+</th>
+
+<th style="text-align:right;">
+
+yhat
+
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="text-align:left;">
+
+Green
+
+</td>
+
+<td style="text-align:right;">
+
+24.50926
+
+</td>
+
+</tr>
+
+<tr>
+
+<td style="text-align:left;">
+
+Non-green
+
+</td>
+
+<td style="text-align:right;">
+
+24.12656
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 # **Q3 - Predictive Model Building: California Housing**
 
@@ -262,6 +317,6 @@ Three-Way Int. Model
 
 </table>
 
-![fig2](DM_HW3_files/figure-gfm/unnamed-chunk-16-1.png)
+![fig2](DM_HW3_files/figure-gfm/unnamed-chunk-18-1.png)
 
-![Fig3](DM_HW3_files/figure-gfm/unnamed-chunk-18-1.png)
+![Fig3](DM_HW3_files/figure-gfm/unnamed-chunk-20-1.png)
