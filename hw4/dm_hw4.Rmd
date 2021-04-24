@@ -1,0 +1,531 @@
+---
+title: "DM_HW_4"
+author: "Anuka Revi"
+date: "4/19/2021"
+output: github_document
+fig_caption: yes
+header-includes: \usepackage{caption}
+always_allow_html: true
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning=FALSE,
+                      message=FALSE,
+                      echo=FALSE
+                     )
+```
+
+
+
+
+
+```{r}
+#load libraries
+
+library(tidyverse)
+library(corrplot)
+library(gridExtra)
+library(GGally)
+library(LICORS)
+library(skimr)
+library(kableExtra)
+library(dplyr)
+library(factoextra)
+library(arules)
+library(arulesViz)
+library(RColorBrewer)
+```
+
+
+
+
+
+# **Clustering and PCA**
+
+
+
+This data wine.csv contains information on 11 chemical properties of 6500 different bottles of *vinho verde* from northern Portugal. I am trying to present a PCA and K-means clustering model that is capable of distinguishing the red wine from the white one, using only the "unsupervised" information contained in the data on chemical properties. Additionally, we will try to assess whether these models are capable of distinguishing higher form the lower quality of wine.
+
+Fig1 below shows a histogram of wine quality across red and white wines. Both colors have approximately normal distribution with higher number of decent quality wines (quality index between 5 and 7) but there are about three times as many white wines in the data as red ones.
+
+
+
+
+
+
+
+
+```{r, load data & data exploration, fig.cap = "figure1-Quality and Color of Wines"}
+#LOAD DATA
+wine <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/wine.csv")
+
+#data exploration
+#skim(wine) - 0 missing variables 1 character,12 numeric
+kable(head(wine))
+wine$color<-as.factor(wine$color)
+
+ggplot(wine,aes(quality,fill=color, color=c("red", "white"))) +
+    geom_histogram(binwidth = .5,col="black") +  
+        facet_grid(color ~ .)+
+        labs(title="Histogram Showing Qulity of Wine", 
+        subtitle="Wine Quality across Red and White colors of Wine") # we see that there are almost 3 times as many white wines as red ones in the data set and more white wines with each quality category  
+
+
+#convert 3 integer columns into numeric 
+wine$free.sulfur.dioxide<-as.numeric(wine$free.sulfur.dioxide)
+wine$total.sulfur.dioxide<-as.numeric(wine$total.sulfur.dioxide)
+wine$quality<-as.numeric(wine$quality)
+ 
+
+#we will not convert color to numeric and we will use it for plotting graphs
+
+
+#create numeric df
+X<-unlist(lapply(wine, is.numeric))
+wine_num<-wine[,X]
+
+```
+
+
+
+
+
+Figure 2 displays boxplot for wine attributes and Correlation Matrix of these attributes. Boxplot is a useful tool to visualize distribution of each characteristic(variable) in the wine data set. From the matrix we see a perfect negative linear relationship between alcohol and density. Figure 3 shows the relationship between density and alcohol that proves that its linear and negative.
+
+
+
+```{r, fig.cap="fig 2 - Visualization"}
+
+# Boxplot for each Attribute  
+wine %>%
+  gather(Attributes, values, c(1:12)) %>%
+  ggplot(aes(x=reorder(Attributes, values, FUN=median), y=values, fill=Attributes)) +
+  geom_boxplot(show.legend=FALSE) +
+  labs(title="Wines Attributes - Boxplots") +
+  theme_bw() +
+  theme(axis.title.y=element_blank(),
+        axis.title.x=element_blank()) +
+  ylim(0, 35) +
+  coord_flip()
+
+```
+
+
+
+
+```{r, fig.cap="Fig2 - Correlation Matrix"}
+
+
+
+# Correlation matrix 
+corrplot(cor(wine_num), type="upper", method="square", tl.cex=1)
+
+#correlation plot shows that there is a prefect negative linear relationship between
+#alcohol and density as well as strong positive correlation between total sulfur dioxide and free #sulfur dioxide . we can model these relationships below.
+```
+
+
+
+
+
+```{r, fig.cap="figure3-Correlation"}
+
+
+# Relationship between alcohol and density
+ggplot(wine, aes(x=alcohol, y=density)) +
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) +
+  labs(title="Wines Attributes",
+       subtitle="Relationship between Alcohol and Density") +
+  theme_bw()
+
+
+```
+
+
+
+
+When we do clustering and PCA we need to normalize values in order to avoid measurements of different size to distort our analysis. We want mean of 0 and standard deviation of 1.
+To evaluate the optimal K for clustering I'll use the elbow plot. We should choose a number of clusters so that adding another cluster does not give much better partition of the data. In this case the correct number is 3. Thus we can run K-means algorithm with k=3 (It is important to remember that we are using normalized data and color variable of interest is not included)
+
+
+
+
+```{r, data prep, include=FALSE}
+
+#normalization
+wine_norm <- as.data.frame(scale(wine_num, center=TRUE, scale=TRUE))
+
+#standardized mean
+center<-attr(wine_norm, "scaled::center")
+
+
+#standardized sd.dev
+scale<-attr(wine_norm, "scaled::scale")
+```
+
+
+
+
+
+
+
+
+
+```{r, fig.cap="figure4"}
+library(foreach)
+k_grid=seq(2,20,by=1)
+SSE_grid=foreach (k=k_grid,.combine="c")%do%{cluster_k=kmeans(wine_norm,k,nstart=50)
+cluster_k$tot.withinss}
+
+qplot(2:20, SSE_grid, geom=c("point", "line"),
+            xlab="Number of clusters", ylab="Total within-cluster sum of squares") +
+  scale_x_continuous(breaks=seq(0, 10, 1)) +
+  theme_bw()
+```
+
+
+
+
+
+
+
+```{r, include=FALSE}
+# k-means with k=3
+set.seed(5789)
+
+wine_k3 <- kmeans(wine_norm, centers=3, iter.max=100, nstart=100)
+
+
+# Using kmeans++ initialization
+wine_k3plus = kmeanspp(wine_norm, k=3, iter.max=100, nstart=100)
+
+
+
+# Mean values of each cluster
+aggregate(wine_norm, by=list(wine_k3$cluster), mean)
+
+aggregate(wine_norm, by=list(wine_k3plus$cluster), mean)
+
+
+#between cluster sum of squares
+wine_k3$betweenss
+# Within-cluster sum of squares
+wine_k3$withinss
+# Total within-cluster sum of squares 
+wine_k3$tot.withinss
+##check what is in what cluster 
+which(wine_k3$cluster == 1)
+which(wine_k3$cluster == 2)
+which(wine_k3$cluster == 3)
+```
+
+
+
+
+```{r fig.cap="Cluster Plots"}
+
+
+
+# A few plots with cluster membership shown
+qplot(quality, data=wine_norm, color=factor(wine_k3$cluster))
+qplot(quality, data=wine_norm, color=factor(wine_k3plus$cluster))
+
+fviz_cluster(list(data = wine_norm, cluster = wine_k3plus$cluster),
+             ellipse.type = "norm", geom = "point", stand = FALSE,
+             palette = "jco", ggtheme = theme_classic())
+```
+
+
+
+
+
+```{r, warning=FALSE, message=FALSE, fig.cap="cluster with pairs"}
+
+
+# Clustering 
+
+
+ggpairs(cbind(wine_norm, Cluster=as.factor(wine_k3$cluster)),
+        columns=1:12, aes(colour=Cluster, alpha=0.5),
+        lower=list(continuous="points"),
+        upper=list(continuous="blank"),
+        axisLabels="none", switch="both") +
+        theme_bw()
+
+```
+
+
+
+
+
+
+## **PCA for wine analysis** 
+
+
+
+```{r}
+library(ISLR)
+modelpca<-prcomp(wine_norm, center=TRUE, scale=TRUE)
+
+#names(modelpca)
+#summary(modelpca) #<- shows importance of each components
+
+std_dev <- modelpca$sdev
+
+pr_var <- std_dev^2
+
+prop_varex <- pr_var/sum(pr_var)
+
+plot(cumsum(prop_varex), xlab = "Principal Component",
+     ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+
+fviz_eig(modelpca, addlabels=TRUE, ylim=c(0,40), geom = c("bar", "line"), barfill = "pink", barcolor="grey",linecolor = "red", ncp=10)+
+labs(title = "wine variance - PCA",
+         x = "Principal Components", y = "% of variances")
+
+
+
+#get pca variables
+all_var <- get_pca_var(modelpca)
+kable(head(all_var$contrib))
+
+```
+
+
+
+
+We see from the PCA model that 3 principle elements explain over 60% of the data & 8 principle components explain 80% of the data 
+
+
+
+
+
+# **Market Segmentation**
+
+
+The goal of this project is for NutrientH20 which is a hypothetical consumer drink brand to understand its social-media audience a little bit better to maximize appeal to each of their market segment. The sample was taken from the brand's Twitter followers (every tweet by its followers collected over 7 days period in June 2014 and was categorized based on its content using a pre-specified scheme of 36 different categories, each representing a broad area of interest (e.g. politics, sports, family, etc. We will use K-Means clustering to analyze this data.
+
+
+###  **Data Exploration**
+
+```{r}
+marketing <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/social_marketing.csv")
+
+kable(head(marketing))
+#str(marketing)
+marketing$X<-as.factor(marketing$X) # convert character into factors
+#now we have all integer values 
+
+
+# as in question 1 i want to create corr matrix 
+corr<-cor(marketing[c(2:37)])
+corrplot(corr, method="ellipse",, type="upper", tl.cex=0.9)
+```
+
+
+First thing we are looking at the correlation matrix and we see that some variables are strongly correlated. some of the most correlated variables are:
+ -> online_gaming and college_uni
+ -> health nutrition & personal fitness
+ -> cooking with fashion and beauty
+ -> religion with parenting
+ 
+ 
+
+###  **K-Means Clustering**
+
+ 
+K-means clustering requires normalization of the data. I show elbow method to analyze what K-value is the most optimal for our data but it is not very helpful. According to the elbow plot we would go with 2 clusters but with given number of different market segments that wouldnot be enough. So I arbitrarily chose K=5. 
+
+```{r}
+# We start with standardizing variables
+marketing_norm <-scale(marketing[,2:37], center=TRUE, scale=TRUE)
+
+# see whats the center ( mean ) and std. dev for standardized data
+mean=attr(marketing_norm, "scaled::center")
+
+sd.dev=attr(marketing_norm, "scaled::scale")
+
+
+```
+
+
+
+```{r, fig.cap="Elbow Plot"}
+
+
+library(foreach)
+k_grid=seq(1,10,by=1)
+SSE_grid=foreach (k=k_grid,.combine="c")%do%{cluster_k=kmeans(marketing_norm,k,nstart=50)
+cluster_k$tot.withinss}
+
+qplot(1:10, SSE_grid, geom=c("point", "line"),
+            xlab="Number of clusters", ylab="Total within-cluster sum of squares") +
+  scale_x_continuous(breaks=seq(0, 10, 1)) +
+  theme_bw()
+
+
+```
+
+
+```{r}
+#start clustering with K=5
+
+set.seed(1234)
+cluster5<-kmeans(marketing_norm, 5,nstart=25)
+
+#for visualizing clusters I found the package factoExtra that does beautiful plots for clustering 
+# we need to use fviz_cluster like I did in Q1
+#?fviz_cluster
+
+fviz_cluster(cluster5, data=marketing_norm, ellipse.type="euclid", ggtheme=theme_classic(), geom="point", main="Cluster Plot for K=5")
+```
+
+In order to identify which cluster belongs to which type of market segment(customer profiles) we need to apply these clusters to the median number of tweets in the original marketing data. 
+
+
+
+```{r}
+#segment profiles
+
+
+market_segments<-aggregate(marketing, by=list(cluster=cluster5$cluster), mean)%>%as.data.frame()
+#I am going to remove X varible which is ID numbers and unnecessary for our purposes
+market_segments$X=market_segments$X=NULL
+market_segments$chatter=market_segments$chatter=NULL
+
+kable(head(market_segments))
+
+# transpose
+market_segment_t<-t(market_segments)
+# get row and colnames in order
+colnames(market_segment_t) <- rownames(market_segments)
+rownames(market_segment_t) <- colnames(market_segments)
+
+# REmoving cluster names
+market_segment_t2 = market_segment_t[-1,]
+
+
+k = colnames(market_segment_t2)[apply(market_segment_t2,1,which.max)]
+features = cbind(rownames(market_segment_t2),k)%>%kable()
+
+```
+
+
+
+
+In summary applying K-means clusters with K=5 gives us different segments, in cluster 1 we see people who are into personal fitness, outdoors, eco-friendly, into health nutrition; in Cluster 2 we have people who are more family oriented into sports, food, family, crafts, religion, parenting, school, Cluster 3 are people who like to travel , are into politics, news, automotive; Cluster 4 has no people who are characterized with given  labels and Cluster 5 has most diverse groups who are into current events, photo sharing, tv_films, home and garden, music, online gaming, shopping, college-university, sports playing, business, art, dating, fashion and adult industry (Cluster 5  cluster seems to have aggregated many diverse segments into 1 category and maybe using more than 5 clusters would be useful in future to perform similar analysis)
+
+
+
+
+
+
+
+
+# **Association Rules for Grocery Purchases**
+
+
+
+
+Market Basket analysis is one the key techniques used by large retailers to uncover associations between items. In this project we are presented with the data file which is a list of shopping baskets: one person's basket for each row, with multiple items per row separated by commas. We have 15297 transactions and 170 columns. So we have 170 product descriptions involved in the dataset and 15297 collections of these items.
+
+Graph below depicts Item Frequency Plot. This shows that whole milk has the highest sales. If the grocery store wanted to increase sales for yogurt, it would be reasonable to put it next to milk. Discovered item sets make sense, when people shop they tendto buy products that are in the same isle (butter& milk; vegetables and fruits) or go well together (bread, butter). 
+  
+
+
+
+```{r, include=FALSE}
+#loadlibraries
+library(grid)
+
+
+
+#load dataset
+
+groceries <- read.csv("https://raw.githubusercontent.com/jgscott/ECO395M/master/data/groceries.txt", header = FALSE)
+
+kable(head(groceries))
+
+# str(groceries) <- we have 15296 observations(each row=persons basket) and 4 variable vectors 
+
+#rename column to items
+colnames(groceries)<-c("items")
+
+#we have to store basket format transaction data into csv file
+write.csv(groceries, "C:/Users/anuka/Documents/GitHub/datamining_hw/hw4/groceries.csv", quote=FALSE,row.names = FALSE)
+
+#convert basket format into object of  transaction class
+tr<-read.transactions("C:/Users/anuka/Documents/GitHub/datamining_hw/hw4/groceries.csv", format="basket",sep=",")
+
+
+summary(tr)
+```
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+```{r}
+
+
+#create item frequency plot
+
+
+itemFrequencyPlot(tr, topN=20, type="absolute", col=brewer.pal(6, "Pastel2"), main="Absolute Item Frequency Plot")
+```
+  
+  
+  
+  
+  
+###  > **Generating Rules**
+
+We will use *APRIORI* algorithm in package *arules*. My specified Min support threshold will be 0.001, confidence level will be 0.4 (Higher confidence level gives very few associations, so I decided to choose the more optimal number)
+
+  
+```{r, include=FALSE}
+association.rules<-apriori(tr, parameter = list(supp=0.001, conf=0.4, maxlen=10)) #maxlen - only patterns up to                                                                                           length10
+summary(association.rules)
+
+
+inspect(association.rules)%>%kable()
+```
+
+
+```{r}
+# assoc. with lift>1 & support >0.01
+
+inspect(subset(association.rules, subset=lift > 1 & confidence > 0.5))%>%kable()
+```
+
+ - 94% of customers who bought **liquor,red/blush wine** also bought **bottled beer**
+ - 52% of customers who bough curd, tropical fruit also bought whole milk, also 51% who bought butter,root vegetables also bought whole milk. As wee see whole milk is generally producing the highest sales. interactive visualized graphs are plotted below. It is easy to see that the strongest association is bwteen drinks  wine and beer. Curd, other vegetables as well as milk products such as butter also are associated with whole milk.
+ 
+
+ 
+ 
+```{r}
+
+###visualization
+
+# we have 17 rules, lets focus on first 10 rules to make graph mor appealing
+
+association.rules10<-head(association.rules, n=10, by="confidence")
+plot(association.rules10, method="graph", engine="htmlwidget")
+print.htmlwidget<-plot(association.rules10, method="graph", view=interactive())
+```
+ 
+  
+  

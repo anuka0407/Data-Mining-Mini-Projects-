@@ -1,0 +1,265 @@
+---
+title: "Data Mining Final Project"
+author: "Anuka Revi"
+date: "4/13/2021"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning= FALSE,
+                      message=FALSE,
+                      include=FALSE)
+```
+
+
+```{r}
+
+
+library(tidyverse)
+library(janitor)
+library(xgboost)
+library(skimr)
+library(data.table)
+library(ggcorrplot)
+library(psych)
+
+
+#load data 
+
+birthweight18 <- birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
+
+
+### Create list of columns with missing values
+na99<-c("combgest", "apgar5", "wtgain", "m_ht_in",
+        "previs", "illb_r11", "priorterm", "priorlive", "fagecomb")
+
+#na999<-("pwgt_r")
+
+
+na9999<-c("dbwt", "dob_tt")
+
+
+#na99.9<- ("bmi")
+
+### Replace missing values with NA
+
+birthweight18[ ,na99][birthweight18[ ,na99] == 99] <- NA
+birthweight18[ ,na9999][birthweight18[ ,na9999] == 9999] <- NA
+birthweight18$pwgt_r[birthweight18$pwgt_r==999]<-NA
+birthweight18$bmi[birthweight18$bmi==99.9]<-NA
+birthweight18$no_infec[birthweight18$no_infec==9]<-NA
+birthweight18$dmeth_rec[birthweight18$dmeth_rec==9]<-NA
+birthweight18$attend[birthweight18$attend==9]<-NA
+birthweight18$illb_r11[birthweight18$illb_r11==88]<-NA
+
+# convert some variables as factors with levels
+
+birthweight18_clean<-birthweight18 %>%
+  dplyr::mutate(mrace6=mrace6 %>%
+           factor()%>%
+           forcats::fct_recode("10"="white",
+                               "20"="black","30"="AIAN", "40"="asian", "50"="NHOPI",
+                               "60"="more than 1 race"))%>%
+  dplyr::mutate(mbstate_rec = mbstate_rec %>%
+                  factor() %>% forcats::fct_recode("1"="born in the U.S.",
+                                                   "2"="born outside the U.S.",
+                                                   "3"="unknown")) %>%
+  dplyr::mutate(mbstate_rec = mbstate_rec %>%
+                  factor() %>% forcats::fct_recode("1"="born in the U.S.",
+                                                   "2"="born outside the U.S.",
+                                                   "3"="unknown")) %>%
+  dplyr::mutate(meduc= meduc %>%
+                  factor() %>% forcats::fct_recode("1"="1-8 grade",
+                                                   "2"="9-12 grade, no HS",
+                                                   "3"="HS hiploma",
+                                                   "4"="some college credits",
+                                                   "5"="AA AS",
+                                                   "6"="BA BS",
+                                                   "7"="MA MS",
+                                                   "8"="PhD EdD")) %>%
+  dplyr::mutate(bfacil3 = bfacil3 %>%
+                  factor() %>% forcats::fct_recode("1"="Hospital",
+                                                   "2"="Not Hospital",
+                                                   "3"="unknown")) %>%
+   dplyr::mutate(frace6=frace6 %>%
+           factor()%>%
+           forcats::fct_recode("1"="white",
+                               "2"="black","3"="AIAN", "4"="asian", "5"="NHOPI",
+                               "6"="more than 1 race", "9"="unknown"))%>%
+  
+  dplyr::mutate(dmar=dmar %>%
+           factor()%>%
+           forcats::fct_recode("1"="married",
+                               "2 and 3"="unmarried", "9"="unknown"))%>%
+  
+  dplyr::mutate(illb_rll=illb_r11 %>%
+           factor()%>%
+           forcats::fct_recode("00 and 01"="less than 18 months",
+                               "02 and 03"="less than 2 years",
+                               "04 and 05"="less than 4 years",
+                               "06 and 07"="less than 6 years",
+                               "99"="unknown"))%>%
+ 
+  dplyr::mutate_at(vars(f_cigs_1, f_cigs_2, f_cigs_3, no_infec),           # declare all there variables to be factors with the same two levels
+                   factor,
+                   levels = 0:1,
+                   labels = c("No", "Yes"))%>%
+   dplyr::mutate(dmeth_rec=dmeth_rec %>%
+           factor()%>%
+           forcats::fct_recode("1,2,5"="Vaginal",
+                               "3,4,6"="C-section"))%>%
+   dplyr::mutate(attend=attend %>%
+           factor()%>%
+           forcats::fct_recode("1,2"="Doctor",
+                               "3,4"="midwife",
+                               "5"="other"))
+  
+ 
+  
+birthweight18_clean <- rename(birthweight18_clean,
+  birth_month = dob_mm,
+  birth_time = dob_tt,
+  birth_weight = dbwt,
+  mother_age = mager,
+  mother_birthplace = mbstate_rec,
+  hospital = bfacil3,
+  mother_race = mrace6,
+  mother_maritalstatus = dmar,
+  mother_education = meduc,
+  father_combinedage = fagecomb,
+  father_race = frace6,
+  father_education = feduc,
+  time_sincelastbirth = illb_r11,
+  prenatal_visits = previs,
+  prepreg_weight = pwgt_r,
+  gest_diabetes = rf_gdiab,
+  hypertension_eclampsia = rf_ehype,
+  infertility_treatment = rf_inftr,
+  previous_cesarian = rf_cesar,
+  no_infections = no_infec,
+  labor_induced = ld_indl,
+  anesthesia = ld_anes,
+  delivery_method = dmeth_rec,
+  ruptured_uterus = mm_rupt,
+  perineal_laceration = mm_plac,
+  plurality = dplural,
+  combined_gestation = combgest,
+  under_37weeks = gestrec3,
+  breastfed = bfed
+)
+
+  
+  
+                  
+  
+
+
+#summary(birthweigh18_clean)
+
+
+#skim(birthweight18_clean)
+ 
+ 
+
+```
+
+
+# **Predicting Birthright for Babies**
+
+
+## **Abstract**
+
+summary of our questions, methods, results, and conclusions in a few 100 words
+
+## **Introduction**
+
+Baby announcements are sweet and memorable. Expecting parents usually know their approximate due date at the beginning of the pregnancy and learn about their baby's gender at around 20 weeks mark. While gender reveal, time of birth and name of the new baby are all exciting and great news for the entire family to have, OB-GYNS mostly look at baby's development, growth and their weight. Estimating baby weight in particular is very important, since a large size baby can pose serious injuries to the baby and its mother. Ultrasounds are often used to estimate baby's weight, but they are not always accurate. When I was over 40 weeks pregnant, my doctor told me that the baby was an average size and I didnot need to be induced, however my daughter was born over 8.9lbs which was significantly larger than the estimated size and it made my delivery more complicated. So While exploring my project ideas, I came across to the NBER natality birth data from 2018 that contained the features of the baby like birth date, gender, medical conditions of the birth mother, number of children born etc. My goal is to predict the birthright of the baby depending on the week of pregnancy. Better estimations used by doctors  should mean easier deliveries and less complications and its interesting to see how machine learning tools could help us estimate the birthweight. 
+
+
+
+
+
+## **Methods**
+
+
+
+My dataset birthweight18.csv contains 50000 randomly chosen samples from 2018 U.S. data files
+(<https://www.nber.org/research/data/vital-statistics-natality-birth-data>). There are 42 variables that were chosen from the initial 142 variables on the dataset. 
+
+
+
+
+## **Data Exploration**
+
+
+```{r, fig.cap="Figure1"}
+##plot histogram of birthweight variable dbwt
+
+Skim(birthweight18$dbwt)
+
+
+
+
+g <- ggplot(birthweight18, aes(dbwt)) + scale_fill_brewer(palette = "Spectral")
+
+g + geom_histogram(aes(fill=sex), 
+                   binwidth = 200, 
+                   col="black", 
+                 
+                   ) + labs(title="Histogram of Birthweight", 
+                                   subtitle="Birthweight and Sex of the infant") 
+
+
+
+
+
+
+#now we need to convert some variables into factors ( like mrace6 but we have to look at the code book and it seems weird its coded from 1- 6 but data has values of 10-60) There are several variables we have to code as factors but we have to check those 
+
+
+
+#correlation 
+numeric<-birthweight18%>%select("dob_mm","dbwt","mager","fagecomb","priorlive","priorterm",
+                                "illb_r11","previs","cig_1","cig_2","cig_3","bmi","pwgt_r",
+                                "wtgain","rf_cesarn","dplural","combgest","gestrec3")
+corr<-round(cor(numeric),1)
+ggcorrplot(corr, hc.order = TRUE, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="circle", 
+           colors = c("tomato2", "white", "springgreen3"), 
+           title="Correlogram of birthweight variables", 
+           ggtheme=theme_bw)
+
+```
+
+
+
+
+
+## **Results**
+
+tables figs and texst that illustrate your findings. (4 -6 figures and tables do not incuudefog or table if you do not discuss it in a text)
+
+
+
+
+## **Conclusion**
+
+interpret what you founds, man lessons we should take away from your report
+
+
+## **Appendix**
+optional. any details figs 
+
+
+
+--------------------------------------------------------------------------------------------------
+
+###Data Worfklow
+
+
+
+
