@@ -507,6 +507,7 @@ inspect(association.rules)%>%kable()
 ```{r}
 # assoc. with lift>1 & support >0.01
 
+
 inspect(subset(association.rules, subset=lift > 1 & confidence > 0.5))%>%kable()
 ```
 
@@ -520,12 +521,123 @@ inspect(subset(association.rules, subset=lift > 1 & confidence > 0.5))%>%kable()
 
 ###visualization
 
+
+library(htmlwidgets)
 # we have 17 rules, lets focus on first 10 rules to make graph mor appealing
 
 association.rules10<-head(association.rules, n=10, by="confidence")
 plot(association.rules10, method="graph", engine="htmlwidget")
-print.htmlwidget<-plot(association.rules10, method="graph", view=interactive())
+
 ```
- 
-  
+
+
+
+
+
+
+
+# **Author attribution**
+
+
+
+In this project we are trying to build a model for predicting the author of the article on the basis of that article's textual content. 
+
+
+
+
+
+
+
+```{r}
+#load libraries
+
+library(dplyr)
+library(gridExtra)
+library(tidytext)
+library(wordcloud2)
+library(randomForest)
+library(caret)
+library(tm)
+library(slam)
+library(proxy)
+library(tidytext)
+#load data
+
+# read in train data and create DTM
+author_train <- dir("https://github.com/jgscott/ECO395M/tree/master/data/ReutersC50/C50train/*")
+
+
+file_list_train <- NULL
+
+class_labels_train <- NULL
+
+
+
+for (name in author_train){
+  file_list_train <- c(file_list_train, Sys.glob(paste0('./ReutersC50/C50train/', name,'/*.txt')))
+  class_labels_train <- c(class_labels_train, rep(name, each = length(Sys.glob(paste0('./ReutersC50/C50train/', name,'/*.txt')))))
+}
+
+
+# define the function that will read in the files
+readerPlain = function(fname){
+  readPlain(elem = list(content = readLines(fname)), 
+            id = fname, language = 'en') }
+
+
+# read in the files and store them as a list
+all_files_train <- lapply(file_list_train, readerPlain)
+
+
+
+
+# give each file a representative name
+file_names_train <- file_list_train %>%
+  strsplit("/") %>%
+  lapply(tail,n = 2) %>%
+  lapply(paste0, collapse = "") %>%
+  unlist
+# create a dataframe with doc_id as author-article and text as the text in that article
+text_vector_train <- NULL
+for(i in 1:length(file_names_train)){
+  text_vector_train <- c(text_vector_train, paste0(content(all_files_train[[i]]), collapse = " "))
+}
+
+
+
+# dataframe with text and document_id
+text_df_train <- data.frame(doc_id = file_names_train,
+                            text = text_vector_train)
+# convert the dataframe to a Corpus
+train_corpus_raw <- VCorpus(DataframeSource(text_df_train))
+# read in the test documents
+author_names_test <- dir("./ReutersC50/C50test")
+file_list_test <- NULL
+class_labels_test <- NULL
+for (name in author_names_test){
+  file_list_test <- c(file_list_test, Sys.glob(paste0('./ReutersC50/C50test/', name,'/*.txt')))
+  class_labels_test <- c(class_labels_test, rep(name, each = length(Sys.glob(paste0('./ReutersC50/C50test/', name,'/*.txt')))))
+}
+# read in the files and store them as a list
+all_files_test <- lapply(file_list_test, readerPlain)
+# give each file a representative name
+file_names_test <- file_list_test %>%
+  strsplit("/") %>%
+  lapply(tail,n = 2) %>%
+  lapply(paste0, collapse = "") %>%
+  unlist
+# create a dataframe with doc_id as author-article and text as the text in that article
+text_vector_test <- NULL
+for(i in 1:length(file_names_test)){
+  text_vector_test <- c(text_vector_test, paste0(content(all_files_test[[i]]), collapse = " "))
+}
+# dataframe with text and document_id
+text_df_test <- data.frame(doc_id = file_names_test,
+                           text = text_vector_test)
+# convert the dataframe to a Corpus
+test_corpus_raw <- VCorpus(DataframeSource(text_df_test))
+```
+
+```
+
   

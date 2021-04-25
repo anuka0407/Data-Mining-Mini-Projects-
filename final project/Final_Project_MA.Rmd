@@ -1,6 +1,6 @@
 ---
 title: "Data Mining Final Project"
-author: "Anuka Revi"
+author: "Anuka Revi Maria Gilbert"
 date: "4/13/2021"
 output: github_document
 ---
@@ -23,11 +23,29 @@ library(skimr)
 library(data.table)
 library(ggcorrplot)
 library(psych)
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(lubridate)
+
+library(scales)
+library(FNN)
+library(class)
+library(rsample)
+library(caret)
+library(modelr)
+library(parallel)
+library(foreach)
+library(randomForest)
+library(gbm)
+library(pdp)
+
+
 
 
 #load data 
 
-birthweight18 <- birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
+birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
 
 
 ### Create list of columns with missing values
@@ -44,124 +62,151 @@ na9999<-c("dbwt", "dob_tt")
 
 ### Replace missing values with NA
 
-birthweight18[ ,na99][birthweight18[ ,na99] == 99] <- NA
-birthweight18[ ,na9999][birthweight18[ ,na9999] == 9999] <- NA
-birthweight18$pwgt_r[birthweight18$pwgt_r==999]<-NA
-birthweight18$bmi[birthweight18$bmi==99.9]<-NA
-birthweight18$no_infec[birthweight18$no_infec==9]<-NA
-birthweight18$dmeth_rec[birthweight18$dmeth_rec==9]<-NA
-birthweight18$attend[birthweight18$attend==9]<-NA
-birthweight18$illb_r11[birthweight18$illb_r11==88]<-NA
+birthweight_new[ ,na99][birthweight_new[ ,na99] == 99] <- NA
+birthweight_new[ ,na9999][birthweight_new[ ,na9999] == 9999] <- NA
+birthweight_new$pwgt_r[birthweight_new$pwgt_r==999]<-NA
+birthweight_new$bmi[birthweight_new$bmi==99.9]<-NA
+birthweight_new$no_infec[birthweight_new$no_infec==9]<-NA
+birthweight_new$dmeth_rec[birthweight_new$dmeth_rec==9]<-NA
+birthweight_new$attend[birthweight_new$attend==9]<-NA
+birthweight_new$illb_r11[birthweight_new$illb_r11==88]<-NA
 
 # convert some variables as factors with levels
 
-birthweight18_clean<-birthweight18 %>%
-  dplyr::mutate(mrace6=mrace6 %>%
-           factor()%>%
-           forcats::fct_recode("10"="white",
-                               "20"="black","30"="AIAN", "40"="asian", "50"="NHOPI",
-                               "60"="more than 1 race"))%>%
-  dplyr::mutate(mbstate_rec = mbstate_rec %>%
-                  factor() %>% forcats::fct_recode("1"="born in the U.S.",
-                                                   "2"="born outside the U.S.",
-                                                   "3"="unknown")) %>%
-  dplyr::mutate(mbstate_rec = mbstate_rec %>%
-                  factor() %>% forcats::fct_recode("1"="born in the U.S.",
-                                                   "2"="born outside the U.S.",
-                                                   "3"="unknown")) %>%
-  dplyr::mutate(meduc= meduc %>%
-                  factor() %>% forcats::fct_recode("1"="1-8 grade",
-                                                   "2"="9-12 grade, no HS",
-                                                   "3"="HS hiploma",
-                                                   "4"="some college credits",
-                                                   "5"="AA AS",
-                                                   "6"="BA BS",
-                                                   "7"="MA MS",
-                                                   "8"="PhD EdD")) %>%
-  dplyr::mutate(bfacil3 = bfacil3 %>%
-                  factor() %>% forcats::fct_recode("1"="Hospital",
-                                                   "2"="Not Hospital",
-                                                   "3"="unknown")) %>%
-   dplyr::mutate(frace6=frace6 %>%
-           factor()%>%
-           forcats::fct_recode("1"="white",
-                               "2"="black","3"="AIAN", "4"="asian", "5"="NHOPI",
-                               "6"="more than 1 race", "9"="unknown"))%>%
-  
-  dplyr::mutate(dmar=dmar %>%
-           factor()%>%
-           forcats::fct_recode("1"="married",
-                               "2 and 3"="unmarried", "9"="unknown"))%>%
-  
-  dplyr::mutate(illb_rll=illb_r11 %>%
-           factor()%>%
-           forcats::fct_recode("00 and 01"="less than 18 months",
-                               "02 and 03"="less than 2 years",
-                               "04 and 05"="less than 4 years",
-                               "06 and 07"="less than 6 years",
-                               "99"="unknown"))%>%
- 
-  dplyr::mutate_at(vars(f_cigs_1, f_cigs_2, f_cigs_3, no_infec),           # declare all there variables to be factors with the same two levels
-                   factor,
-                   levels = 0:1,
-                   labels = c("No", "Yes"))%>%
-   dplyr::mutate(dmeth_rec=dmeth_rec %>%
-           factor()%>%
-           forcats::fct_recode("1,2,5"="Vaginal",
-                               "3,4,6"="C-section"))%>%
-   dplyr::mutate(attend=attend %>%
-           factor()%>%
-           forcats::fct_recode("1,2"="Doctor",
-                               "3,4"="midwife",
-                               "5"="other"))
-  
- 
-  
-birthweight18_clean <- rename(birthweight18_clean,
-  birth_month = dob_mm,
-  birth_time = dob_tt,
-  birth_weight = dbwt,
-  mother_age = mager,
-  mother_birthplace = mbstate_rec,
-  hospital = bfacil3,
-  mother_race = mrace6,
-  mother_maritalstatus = dmar,
-  mother_education = meduc,
-  father_combinedage = fagecomb,
-  father_race = frace6,
-  father_education = feduc,
-  time_sincelastbirth = illb_r11,
-  prenatal_visits = previs,
-  prepreg_weight = pwgt_r,
-  gest_diabetes = rf_gdiab,
-  hypertension_eclampsia = rf_ehype,
-  infertility_treatment = rf_inftr,
-  previous_cesarian = rf_cesar,
-  no_infections = no_infec,
-  labor_induced = ld_indl,
-  anesthesia = ld_anes,
-  delivery_method = dmeth_rec,
-  ruptured_uterus = mm_rupt,
-  perineal_laceration = mm_plac,
-  plurality = dplural,
-  combined_gestation = combgest,
-  under_37weeks = gestrec3,
-  breastfed = bfed
+birthweight_new <- rename(birthweight_new,
+                              birth_month = dob_mm,
+                              birth_time = dob_tt,
+                              birth_weight = dbwt,
+                              mother_age = mager,
+                              mother_birthplace = mbstate_rec,
+                              hospital = bfacil3,
+                              mother_race = mrace6,
+                              mother_maritalstatus = dmar,
+                              mother_education = meduc,
+                              father_combinedage = fagecomb,
+                              father_race = frace6,
+                              father_education = feduc,
+                              time_sincelastbirth = illb_r11,
+                              prenatal_visits = previs,
+                              prepreg_weight = pwgt_r,
+                              gest_diabetes = rf_gdiab,
+                              hypertension_eclampsia = rf_ehype,
+                              infertility_treatment = rf_inftr,
+                              previous_cesarian = rf_cesar,
+                              no_infections = no_infec,
+                              labor_induced = ld_indl,
+                              anesthesia = ld_anes,
+                              delivery_method = dmeth_rec,
+                              ruptured_uterus = mm_rupt,
+                              perineal_laceration = mm_plac,
+                              plurality = dplural,
+                              combined_gestation = combgest,
+                              under_37weeks = gestrec3,
+                              breastfed = bfed
 )
 
+birthweight_new$mother_race <- as.factor(birthweight_new$mother_race)
+birthweight_new$mother_birthplace <- as.factor(birthweight_new$mother_birthplace)
+birthweight_new$mother_education <- as.factor(birthweight_new$mother_education)
+birthweight_new$hospital <- as.factor(birthweight_new$hospital)
+birthweight_new$father_race <- as.factor(birthweight_new$father_race)
+birthweight_new$mother_maritalstatus <- as.factor(birthweight_new$mother_maritalstatus)
+birthweight_new$time_sincelastbirth <- as.factor(birthweight_new$time_sincelastbirth)
+birthweight_new$delivery_method <- as.factor(birthweight_new$delivery_method)
+birthweight_new$attend <- as.factor(birthweight_new$attend)
+birthweight_new$sex <- as.factor(birthweight_new$sex)
+
+levels(birthweight_new$mother_race) <- list("white"="10","black"="20","asian"="40","NHOPI"="50","more than 1 race"="60")
+levels(birthweight_new$mother_birthplace) <- list("born in the U.S."="1","born outside the U.S."="2","unknown"="3")
+levels(birthweight_new$mother_education) <- list("1-8 grade"="1","9-12 grade no HS"="2","HS diploma"="3","some college"="4","AA AS"="5","BA BS"="6","MA MS"="7","PhD EdD"="8")
+levels(birthweight_new$hospital) <- list("Hospital"="1","Not Hospital"="2","Unknown"="3")
+levels(birthweight_new$father_race) <- list("white"="1","black"="2","AIAN"="3","asian"="4","NHOPI"="5","more than 1 race"="6","unknown"="9")
+levels(birthweight_new$mother_maritalstatus) <- list("married"="1","unmarried"="2","unmarried"="3","unknown"="9")
+levels(birthweight_new$time_sincelastbirth) <- list("less than 18 months"="00","less than 18 months"="01","less than 2 years"="02","less than 2 years"="03","less than 4 years"="04","less than 4 years"="05","less than 6 years"="06","less than 6 years"="07","unknown"="99")
+levels(birthweight_new$delivery_method) <- list("Vaginal"="1","Vaginal"="2","Vaginal"="5","C-section"="3","C-section"="4","C-section"="6")
+levels(birthweight_new$attend) <- list("Doctor"="1","Doctor"="2","midwife"="3","midwife"="4","other"="5")  
+
+
+
+week37to39 <- birthweight_new %>%
+  filter(!is.na(birth_weight)) %>%
+  filter(combined_gestation=="37" | combined_gestation=="38" | combined_gestation=="39") %>%
+  filter(plurality=="1")
+week37to39$time_sincelastbirth <- NULL
+week37to39 <- na.omit(week37to39)
+
+
+
+g <- ggplot(birthweight_new, aes(birth_weight)) + scale_fill_brewer(palette = "Spectral")
+
+g + geom_histogram(aes(fill=sex),
+                   binwidth = 200,
+                   col="black",
+                   
+) + labs(title="Histogram of Birthweight",
+         subtitle="Birthweight and Sex of the infant")  + scale_x_continuous(name="Birthweight, in grams",breaks=seq(0,6000,500)) + scale_y_continuous(name="Number of births",breaks=seq(0,9000,1000))
   
-  
-                  
-  
 
 
-#summary(birthweigh18_clean)
+
+#boost1 = gbm(birth_weight ~ . - X - plurality - breastfed,distribution="gaussian",data=week37to39_train,interaction.depth=4,n.trees=500,shrinkage=.05)
+#gbm.perf(boost1)
+#boost1
 
 
-#skim(birthweight18_clean)
+
+
+#correlation 
+num_cols <- unlist(lapply(birthweight_new, is.numeric))         # Identify numeric columns
+data_num <- birthweight_new[, num_cols]   
+data_num<-na.omit(data_num)
+
+
+corr<-round(cor(data_num),2)
+ggcorrplot(corr, hc.order = TRUE, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="square", 
+           colors = c("tomato2", "white", "springgreen3"), 
+           title="Correlogram of birthweight variables", 
+           ggtheme=theme_bw)
+
+#summary(birthweight_new)
+#remove time since last birth, not really useful 
+birthweight_new$time_sincelastbirth <-NULL
+
+#skim(birthweight_new)
+
+#take care of missing values
+birthweight_new<-na.omit(birthweight_new)
+
+birthweight_new%>%mutate(birth_month=month(birth_month, label=TRUE), birth_time=hm(birth_time))
  
- 
+#skim(birthweight_new)
 
+```
+
+
+
+
+
+```{r, cache=TRUE}
+set.seed(1234)
+week37to39_split = initial_split(week37to39)
+n = nrow(week37to39)
+n_train = floor(0.8*n)
+n_test = n - n_train
+train_cases = sample.int(n, size=n_train, replace=FALSE)
+week37to39_train = training(week37to39_split)
+week37to39_test = testing(week37to39_split)
+
+
+
+forest1 = randomForest(birth_weight ~ . - X - plurality - breastfed - under_37weeks - apgar5,distribution="gaussian",data=week37to39_train,interaction.depth=4,n.trees=500,shrinkage=.05)
+yhat_test = predict(forest1,week37to39_test)
+varImpPlot(forest1)
+rmse(forest1,week37to39_test)
 ```
 
 
@@ -193,47 +238,7 @@ My dataset birthweight18.csv contains 50000 randomly chosen samples from 2018 U.
 ## **Data Exploration**
 
 
-```{r, fig.cap="Figure1"}
-##plot histogram of birthweight variable dbwt
 
-Skim(birthweight18$dbwt)
-
-
-
-
-g <- ggplot(birthweight18, aes(dbwt)) + scale_fill_brewer(palette = "Spectral")
-
-g + geom_histogram(aes(fill=sex), 
-                   binwidth = 200, 
-                   col="black", 
-                 
-                   ) + labs(title="Histogram of Birthweight", 
-                                   subtitle="Birthweight and Sex of the infant") 
-
-
-
-
-
-
-#now we need to convert some variables into factors ( like mrace6 but we have to look at the code book and it seems weird its coded from 1- 6 but data has values of 10-60) There are several variables we have to code as factors but we have to check those 
-
-
-
-#correlation 
-numeric<-birthweight18%>%select("dob_mm","dbwt","mager","fagecomb","priorlive","priorterm",
-                                "illb_r11","previs","cig_1","cig_2","cig_3","bmi","pwgt_r",
-                                "wtgain","rf_cesarn","dplural","combgest","gestrec3")
-corr<-round(cor(numeric),1)
-ggcorrplot(corr, hc.order = TRUE, 
-           type = "lower", 
-           lab = TRUE, 
-           lab_size = 3, 
-           method="circle", 
-           colors = c("tomato2", "white", "springgreen3"), 
-           title="Correlogram of birthweight variables", 
-           ggtheme=theme_bw)
-
-```
 
 
 
