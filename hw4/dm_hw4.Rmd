@@ -3,9 +3,8 @@ title: "DM_HW_4"
 author: "Anuka Revi"
 date: "4/19/2021"
 output: github_document
-fig_caption: yes
-header-includes: \usepackage{caption}
 always_allow_html: true
+ 
 ---
 
 
@@ -14,8 +13,10 @@ always_allow_html: true
 knitr::opts_chunk$set(echo = TRUE,
                       warning=FALSE,
                       message=FALSE,
-                      echo=FALSE
-                     )
+                      echo=FALSE)
+
+                      
+                     
 ```
 
 
@@ -37,6 +38,20 @@ library(factoextra)
 library(arules)
 library(arulesViz)
 library(RColorBrewer)
+library(gridExtra)
+library(tidytext)
+library(wordcloud2)
+library(randomForest)
+library(caret)
+library(tm)
+library(slam)
+library(proxy)
+library(tidytext)
+library(gamlr)
+library(SnowballC)
+library(png)
+library(arulesViz)
+library(htmlwidgets)
 ```
 
 
@@ -45,9 +60,11 @@ library(RColorBrewer)
 
 # **Clustering and PCA**
 
+## **Part A - Predict Wine Color**
 
 
-This data wine.csv contains information on 11 chemical properties of 6500 different bottles of *vinho verde* from northern Portugal. I am trying to present a PCA and K-means clustering model that is capable of distinguishing the red wine from the white one, using only the "unsupervised" information contained in the data on chemical properties. Additionally, we will try to assess whether these models are capable of distinguishing higher form the lower quality of wine.
+
+This data wine.csv contains information on 11 chemical properties of 6500 different bottles of *vinho verde* from northern Portugal. In this mini project I present a PCA and K-means clustering model that is capable of distinguishing the red wine from the white one, using only the "unsupervised" information contained in the data on chemical properties. Additionally, we will try to assess whether these models are capable of distinguishing higher form the lower quality of wine.
 
 Fig1 below shows a histogram of wine quality across red and white wines. Both colors have approximately normal distribution with higher number of decent quality wines (quality index between 5 and 7) but there are about three times as many white wines in the data as red ones.
 
@@ -55,10 +72,7 @@ Fig1 below shows a histogram of wine quality across red and white wines. Both co
 
 
 
-
-
-
-```{r, load data & data exploration, fig.cap = "figure1-Quality and Color of Wines"}
+```{r, load data & data exploration}
 #LOAD DATA
 wine <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/wine.csv")
 
@@ -66,26 +80,28 @@ wine <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data
 #skim(wine) - 0 missing variables 1 character,12 numeric
 kable(head(wine))
 wine$color<-as.factor(wine$color)
+```
 
+
+
+
+```{r fig.cap = "fig1-Quality and Color of Wines"}
 ggplot(wine,aes(quality,fill=color, color=c("red", "white"))) +
     geom_histogram(binwidth = .5,col="black") +  
         facet_grid(color ~ .)+
         labs(title="Histogram Showing Qulity of Wine", 
         subtitle="Wine Quality across Red and White colors of Wine") # we see that there are almost 3 times as many white wines as red ones in the data set and more white wines with each quality category  
+```
 
+
+
+```{r}
 
 #convert 3 integer columns into numeric 
 wine$free.sulfur.dioxide<-as.numeric(wine$free.sulfur.dioxide)
 wine$total.sulfur.dioxide<-as.numeric(wine$total.sulfur.dioxide)
 wine$quality<-as.numeric(wine$quality)
- 
 
-#we will not convert color to numeric and we will use it for plotting graphs
-
-
-#create numeric df
-X<-unlist(lapply(wine, is.numeric))
-wine_num<-wine[,X]
 
 ```
 
@@ -93,7 +109,7 @@ wine_num<-wine[,X]
 
 
 
-Figure 2 displays boxplot for wine attributes and Correlation Matrix of these attributes. Boxplot is a useful tool to visualize distribution of each characteristic(variable) in the wine data set. From the matrix we see a perfect negative linear relationship between alcohol and density. Figure 3 shows the relationship between density and alcohol that proves that its linear and negative.
+Figure 2 displays boxplot for wine attributes and Correlation Matrix of these attributes. Boxplot is a useful tool to visualize distribution of each characteristic(variable) in the wine data set. From the correlation matrix we see a perfect negative linear relationship between alcohol and density as well as strong  positive relationship between free sulfur dioxide and total sulfur dioxide as well as density and residual sugar. Clustering will allow us to see if wines with  characteristics that are similar or correlated to one another end up in the same group. 
 
 
 
@@ -111,47 +127,34 @@ wine %>%
   ylim(0, 35) +
   coord_flip()
 
+
+
+
+
 ```
 
 
 
 
 ```{r, fig.cap="Fig2 - Correlation Matrix"}
-
+#create numeric df
+X<-unlist(lapply(wine, is.numeric))
+wine_num<-wine[,X] #does not contain color we use this for clustering
 
 
 # Correlation matrix 
 corrplot(cor(wine_num), type="upper", method="square", tl.cex=1)
 
 #correlation plot shows that there is a prefect negative linear relationship between
-#alcohol and density as well as strong positive correlation between total sulfur dioxide and free #sulfur dioxide . we can model these relationships below.
+#alcohol and density as well as strong positive correlation between total sulfur dioxide and free #sulfur dioxide . 
 ```
 
 
 
+When we do clustering and PCA we need to normalize values in order to avoid measurements of different size to distort our analysis. We want mean of 0 and standard deviation of 1. To evaluate the optimal K for clustering in general it is useful to use the elbow plot shown below. *We should choose a number of clusters so that adding another cluster does not give much better partition of the data*. In this case elbow plot shows that K=3 could work, but since we know that we want to determine wine color either red or white , **I am using K=2 clusters**  (It is important to remember that we are using normalized data and color variable of interest is not included)
 
 
-```{r, fig.cap="figure3-Correlation"}
-
-
-# Relationship between alcohol and density
-ggplot(wine, aes(x=alcohol, y=density)) +
-  geom_point() +
-  geom_smooth(method="lm", se=FALSE) +
-  labs(title="Wines Attributes",
-       subtitle="Relationship between Alcohol and Density") +
-  theme_bw()
-
-
-```
-
-
-
-
-When we do clustering and PCA we need to normalize values in order to avoid measurements of different size to distort our analysis. We want mean of 0 and standard deviation of 1.
-To evaluate the optimal K for clustering I'll use the elbow plot. We should choose a number of clusters so that adding another cluster does not give much better partition of the data. In this case the correct number is 3. Thus we can run K-means algorithm with k=3 (It is important to remember that we are using normalized data and color variable of interest is not included)
-
-
+\
 
 
 ```{r, data prep, include=FALSE}
@@ -172,10 +175,7 @@ scale<-attr(wine_norm, "scaled::scale")
 
 
 
-
-
-
-```{r, fig.cap="figure4"}
+```{r, fig.cap="figure4", message=FALSE, warning=FALSE}
 library(foreach)
 k_grid=seq(2,20,by=1)
 SSE_grid=foreach (k=k_grid,.combine="c")%do%{cluster_k=kmeans(wine_norm,k,nstart=50)
@@ -194,49 +194,34 @@ qplot(2:20, SSE_grid, geom=c("point", "line"),
 
 
 ```{r, include=FALSE}
-# k-means with k=3
+# k-means with k=2
 set.seed(5789)
 
-wine_k3 <- kmeans(wine_norm, centers=3, iter.max=100, nstart=100)
+wine_k2 <- kmeans(wine_norm, centers=2, iter.max=100, nstart=30)
+
+#inspect cluster 
+#str(wine_k2)
 
 
-# Using kmeans++ initialization
-wine_k3plus = kmeanspp(wine_norm, k=3, iter.max=100, nstart=100)
-
-
-
-# Mean values of each cluster
-aggregate(wine_norm, by=list(wine_k3$cluster), mean)
-
-aggregate(wine_norm, by=list(wine_k3plus$cluster), mean)
-
-
-#between cluster sum of squares
-wine_k3$betweenss
-# Within-cluster sum of squares
-wine_k3$withinss
-# Total within-cluster sum of squares 
-wine_k3$tot.withinss
-##check what is in what cluster 
-which(wine_k3$cluster == 1)
-which(wine_k3$cluster == 2)
-which(wine_k3$cluster == 3)
 ```
 
 
 
+\\newpage
+
+
+\The plot below visualizes clustering with K=2 and table provides the number of red and white wines in each cluster. Clustering with ggpair graphs gives us cluster of 2 different color wines within different characteristics. 
+
 
 ```{r fig.cap="Cluster Plots"}
-
-
-
-# A few plots with cluster membership shown
-qplot(quality, data=wine_norm, color=factor(wine_k3$cluster))
-qplot(quality, data=wine_norm, color=factor(wine_k3plus$cluster))
-
-fviz_cluster(list(data = wine_norm, cluster = wine_k3plus$cluster),
+#k means visualization
+fviz_cluster(list(data = wine_norm, cluster = wine_k2$cluster),
              ellipse.type = "norm", geom = "point", stand = FALSE,
              palette = "jco", ggtheme = theme_classic())
+
+
+table<-xtabs(~wine_k2$cluster+wine$color)%>%as.table()
+table
 ```
 
 
@@ -249,21 +234,25 @@ fviz_cluster(list(data = wine_norm, cluster = wine_k3plus$cluster),
 # Clustering 
 
 
-ggpairs(cbind(wine_norm, Cluster=as.factor(wine_k3$cluster)),
-        columns=1:12, aes(colour=Cluster, alpha=0.5),
+ggpairs(cbind(wine_norm, Cluster=as.factor(wine_k2$cluster)),
+        columns=1:6, aes(colour=Cluster, alpha=0.5),
         lower=list(continuous="points"),
         upper=list(continuous="blank"),
         axisLabels="none", switch="both") +
-        theme_bw()
+        theme_classic()
+
+
 
 ```
 
 
 
+\\**PCA for wine color analysis** 
 
 
 
-## **PCA for wine analysis** 
+Principal component analysis (PCA) reduces the dimensionality of multivariate data, to two or three that can be visualized graphically with minimal loss of information. Clustering using PCA analysis gives us similar results. Also on wine variance - PCA graphs we see that with PCA we can explain over 60% of the variance with just 3 principal components. 
+
 
 
 
@@ -274,15 +263,13 @@ modelpca<-prcomp(wine_norm, center=TRUE, scale=TRUE)
 #names(modelpca)
 #summary(modelpca) #<- shows importance of each components
 
+#visualizing PCA component importance
 std_dev <- modelpca$sdev
 
 pr_var <- std_dev^2
 
 prop_varex <- pr_var/sum(pr_var)
 
-plot(cumsum(prop_varex), xlab = "Principal Component",
-     ylab = "Cumulative Proportion of Variance Explained",
-     type = "b")
 
 fviz_eig(modelpca, addlabels=TRUE, ylim=c(0,40), geom = c("bar", "line"), barfill = "pink", barcolor="grey",linecolor = "red", ncp=10)+
 labs(title = "wine variance - PCA",
@@ -290,16 +277,77 @@ labs(title = "wine variance - PCA",
 
 
 
-#get pca variables
-all_var <- get_pca_var(modelpca)
-kable(head(all_var$contrib))
+loadings=modelpca$rotation
+
+scores=modelpca$x
+
+
+#Clustering with PCA
+
+cluster_pca<-kmeans(scores[,1:3], 2, nstart=30)
+
+#visualize
+
+qplot(scores[,1], scores[,2], color=factor(wine$color), shape=factor(cluster_pca$cluster))
+
+
 
 ```
 
 
 
+```{r include=FALSE}
+# characteristics for each PC
+X1<-order(loadings[,1], decreasing=TRUE)
+colnames(wine_norm)[X1]
+X2<-order(loadings[,2], decreasing=TRUE)
+colnames(wine_norm)[X2]
+X3<-order(loadings[,3], decreasing=TRUE)
+colnames(wine_norm)[X3]
+```
 
-We see from the PCA model that 3 principle elements explain over 60% of the data & 8 principle components explain 80% of the data 
+
+
+
+
+
+
+\newpage
+
+
+
+## **Part B - Wine Quality Prediction**
+
+
+
+In this section we are trying to predict quality of wine. Fig1 - quality and color of wines show that most wines are of quality 6 and very few wines are of quality 8 and above in our dataset. Thus I chose K=7 clusters.
+
+
+
+```{r}
+cluster7<-kmeans(wine_norm, 7, nstart=20)
+
+
+#visualize
+ggplot(wine)+geom_density(aes(x=cluster7$cluster, col=factor(wine$quality), fill=factor(wine$quality)), alpha=0.5)
+
+ggplot(wine)+geom_density(aes(x=wine$quality, col=factor(wine$quality), fill=factor(wine$quality)), alpha=0.5)
+
+
+fviz_cluster(list(data = wine_norm, cluster = cluster7$cluster),
+             ellipse.type = "norm", geom = "point", stand = FALSE,
+             palette = "jco", ggtheme = theme_classic())
+
+result<-xtabs(~cluster7$cluster+wine$quality)
+result
+```
+
+
+
+
+Above graphs show that applying the same methodology as we did in part A, predicting wine quality based on clusters are more difficult than predicting wine color. Some clusters are well defined , such as cluster 7, while others are hard to identify, for instance cluster 3. 
+
+
 
 
 
@@ -308,10 +356,11 @@ We see from the PCA model that 3 principle elements explain over 60% of the data
 # **Market Segmentation**
 
 
-The goal of this project is for NutrientH20 which is a hypothetical consumer drink brand to understand its social-media audience a little bit better to maximize appeal to each of their market segment. The sample was taken from the brand's Twitter followers (every tweet by its followers collected over 7 days period in June 2014 and was categorized based on its content using a pre-specified scheme of 36 different categories, each representing a broad area of interest (e.g. politics, sports, family, etc. We will use K-Means clustering to analyze this data.
+The goal of this project is for NutrientH20 which is a hypothetical consumer drink brand to understand its social-media audience a little bit better to maximize appeal to each of their market segment. The sample was taken from the brand's Twitter followers (every tweet by its followers collected over 7 days period in June 2014 and was categorized based on its content using a pre-specified scheme of 36 different categories, each representing a broad area of interest (e.g. politics, sports, family, etc. I will use K-Means clustering to analyze this data.
 
 
 ###  **Data Exploration**
+
 
 ```{r}
 marketing <- read.csv("C:/Users/anuka/Desktop/Spring 2021/ECO 395M - DATA MINING/Data/social_marketing.csv")
@@ -324,22 +373,33 @@ marketing$X<-as.factor(marketing$X) # convert character into factors
 
 # as in question 1 i want to create corr matrix 
 corr<-cor(marketing[c(2:37)])
-corrplot(corr, method="ellipse",, type="upper", tl.cex=0.9)
 ```
 
 
-First thing we are looking at the correlation matrix and we see that some variables are strongly correlated. some of the most correlated variables are:
+
+
+```{r, fig.cap="Correlation Matrix"}
+
+
+corrplot(corr, method="ellipse", type="upper", tl.cex=0.9)
+```
+
+\\
+
+\First thing we are looking at the correlation matrix and we see that some variables are strongly correlated. some of the most correlated variables are:
  -> online_gaming and college_uni
  -> health nutrition & personal fitness
  -> cooking with fashion and beauty
  -> religion with parenting
- 
+With that in mind we should do clustering and learn whether these variables end up in the same cluster.  
  
 
 ###  **K-Means Clustering**
 
  
-K-means clustering requires normalization of the data. I show elbow method to analyze what K-value is the most optimal for our data but it is not very helpful. According to the elbow plot we would go with 2 clusters but with given number of different market segments that wouldnot be enough. So I arbitrarily chose K=5. 
+K-means clustering requires normalization of the data. I show elbow method to analyze what K-value is the most optimal for our data but it is not very helpful. According to the elbow plot we would go with 2 clusters but with given number of different market segments that would not be enough. So I arbitrarily chose K=6. 
+
+
 
 ```{r}
 # We start with standardizing variables
@@ -355,7 +415,7 @@ sd.dev=attr(marketing_norm, "scaled::scale")
 
 
 
-```{r, fig.cap="Elbow Plot"}
+```{r, fig.cap="Elbow Plot", message=FALSE, warning=FALSE}
 
 
 library(foreach)
@@ -376,33 +436,33 @@ qplot(1:10, SSE_grid, geom=c("point", "line"),
 #start clustering with K=5
 
 set.seed(1234)
-cluster5<-kmeans(marketing_norm, 5,nstart=25)
+cluster6<-kmeans(marketing_norm, 6, nstart=25)
 
 #for visualizing clusters I found the package factoExtra that does beautiful plots for clustering 
 # we need to use fviz_cluster like I did in Q1
 #?fviz_cluster
 
-fviz_cluster(cluster5, data=marketing_norm, ellipse.type="euclid", ggtheme=theme_classic(), geom="point", main="Cluster Plot for K=5")
+fviz_cluster(cluster6, data=marketing_norm, ellipse.type="euclid", ggtheme=theme_classic(), geom="point", main="Cluster Plot for K=6")
 ```
 
-In order to identify which cluster belongs to which type of market segment(customer profiles) we need to apply these clusters to the median number of tweets in the original marketing data. 
+In order to identify which cluster belongs to which type of market segment(customer profiles) we need to apply these clusters to the mean number of tweets in the original marketing data. 
 
 
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 #segment profiles
+library(plotly)
 
-
-market_segments<-aggregate(marketing, by=list(cluster=cluster5$cluster), mean)%>%as.data.frame()
+market_segments<-aggregate(marketing, by=list(cluster=cluster6$cluster), mean)%>%as.data.frame()
 #I am going to remove X varible which is ID numbers and unnecessary for our purposes
 market_segments$X=market_segments$X=NULL
 market_segments$chatter=market_segments$chatter=NULL
 
 kable(head(market_segments))
 
-# transpose
+# we need to do transpose
 market_segment_t<-t(market_segments)
-# get row and colnames in order
+# identify right col and row names
 colnames(market_segment_t) <- rownames(market_segments)
 rownames(market_segment_t) <- colnames(market_segments)
 
@@ -411,14 +471,32 @@ market_segment_t2 = market_segment_t[-1,]
 
 
 k = colnames(market_segment_t2)[apply(market_segment_t2,1,which.max)]
-features = cbind(rownames(market_segment_t2),k)%>%kable()
+features =cbind(rownames(market_segment_t2),k)
+d1<-as.data.frame(features)
+d1%>%kable()
 
 ```
 
 
 
 
-In summary applying K-means clusters with K=5 gives us different segments, in cluster 1 we see people who are into personal fitness, outdoors, eco-friendly, into health nutrition; in Cluster 2 we have people who are more family oriented into sports, food, family, crafts, religion, parenting, school, Cluster 3 are people who like to travel , are into politics, news, automotive; Cluster 4 has no people who are characterized with given  labels and Cluster 5 has most diverse groups who are into current events, photo sharing, tv_films, home and garden, music, online gaming, shopping, college-university, sports playing, business, art, dating, fashion and adult industry (Cluster 5  cluster seems to have aggregated many diverse segments into 1 category and maybe using more than 5 clusters would be useful in future to perform similar analysis)
+In summary applying K-means clusters with K=6 gives us different segments:
+
+
+In cluster 1 into news, computers, business, dating.
+
+Cluster 2: We probably  have a younger population who are into  TV-films, online-gaming, college_uni, sports_playing, art, spam, adult
+
+
+Cluster 3: People in healthy lifestyles -  health_nutrition, eco.  outdoors, personal_fitness
+
+
+Cluster 5: People who like to travel and be up to date with current information - current_events photo_sharing music shopping cooking beauty small_business 
+ 
+
+Cluster 6: family-oriented people -  sports_fandom food family home_and_garden crafts religion parenting school
+
+
 
 
 
@@ -490,29 +568,31 @@ itemFrequencyPlot(tr, topN=20, type="absolute", col=brewer.pal(6, "Pastel2"), ma
   
   
   
-###  > **Generating Rules**
+###  -**Generating Rules**
 
 We will use *APRIORI* algorithm in package *arules*. My specified Min support threshold will be 0.001, confidence level will be 0.4 (Higher confidence level gives very few associations, so I decided to choose the more optimal number)
 
   
-```{r, include=FALSE}
-association.rules<-apriori(tr, parameter = list(supp=0.001, conf=0.4, maxlen=10)) #maxlen - only patterns up to                                                                                           length10
+```{r warning=FALSE, include=FALSE}
+
+association.rules<-apriori(tr, parameter = list(supp=0.001, conf=0.4, maxlen=10)) #maxlen - only patterns up to length10
 summary(association.rules)
+inspectDT(association.rules)
 
 
-inspect(association.rules)%>%kable()
 ```
 
-
-```{r}
-# assoc. with lift>1 & support >0.01
-
-
-inspect(subset(association.rules, subset=lift > 1 & confidence > 0.5))%>%kable()
-```
 
  - 94% of customers who bought **liquor,red/blush wine** also bought **bottled beer**
- - 52% of customers who bough curd, tropical fruit also bought whole milk, also 51% who bought butter,root vegetables also bought whole milk. As wee see whole milk is generally producing the highest sales. interactive visualized graphs are plotted below. It is easy to see that the strongest association is bwteen drinks  wine and beer. Curd, other vegetables as well as milk products such as butter also are associated with whole milk.
+ - 52% of customers who bough curd, tropical fruit also bought whole milk.
+ - 51% who bought butter,root vegetables also bought whole milk. 
+ 
+ 
+ 
+\As wee see whole milk is generally producing the highest sales. interactive visualized graphs are plotted below. It is easy to see that the strongest association is between drinks -- liquor,  wine and beer. Curd, other vegetables as well as milk products such as butter also are associated with whole milk.
+
+
+*PS htmlwidgets gives us nice interactive graph but it wont knit on github output*
  
 
  
@@ -521,19 +601,21 @@ inspect(subset(association.rules, subset=lift > 1 & confidence > 0.5))%>%kable()
 
 ###visualization
 
-
-library(htmlwidgets)
 # we have 17 rules, lets focus on first 10 rules to make graph mor appealing
 
-association.rules10<-head(association.rules, n=10, by="confidence")
-plot(association.rules10, method="graph", engine="htmlwidget")
+association.rules10<-head(association.rules, n=10, by="lift")
 
+
+#visuaize
+plot(association.rules10, method="graph")
+
+#htmlwidget gives us nice interactive visualization but i cant not include in in github output
 ```
 
 
 
 
-
+\newpage
 
 
 # **Author attribution**
@@ -545,82 +627,119 @@ In this project we are trying to build a model for predicting the author of the 
 
 
 
+Data ReutersC50 was converted into a corpus and pre-processed (removing white space, numbers, converting characters to lower letters, removing common stop words in English). 
+
+As a secondary step, I built a DTM (Document Term Matrix) and representing terms as vectors. I also created term frequency and Inverse frequency matrix  and used sparsing to remove terms that were unique and did not occur frequently.  
+
+
+Third step was dimensionality reduction using PCA. And finally I applied Random forests models which gave me a relatively high accuracy rate compared to Lasso model using cvgmlr as we did during the classroom demo.
 
 
 
 ```{r}
-#load libraries
 
-library(dplyr)
-library(gridExtra)
-library(tidytext)
-library(wordcloud2)
-library(randomForest)
-library(caret)
-library(tm)
-library(slam)
-library(proxy)
-library(tidytext)
-#load data
-
-# read in train data and create DTM
-author_train <- dir("https://github.com/jgscott/ECO395M/tree/master/data/ReutersC50/C50train/*")
+# https://gist.github.com/jgscott/28d9d1287a0c3c1477e2113f6758d5ff
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+				
+				
+## Rolling two directories together into a single training corpus
 
 
-file_list_train <- NULL
+train_dirs = Sys.glob('./ReutersC50/C50train/*')
 
-class_labels_train <- NULL
+file_list_train = NULL
+class_labels_train = NULL
 
 
-
-for (name in author_train){
-  file_list_train <- c(file_list_train, Sys.glob(paste0('./ReutersC50/C50train/', name,'/*.txt')))
-  class_labels_train <- c(class_labels_train, rep(name, each = length(Sys.glob(paste0('./ReutersC50/C50train/', name,'/*.txt')))))
+for(author in train_dirs) {
+	
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list_train = append(file_list_train, files_to_add)
+	class_labels_train = append(class_labels_train, rep(author, length(files_to_add)))
 }
 
 
-# define the function that will read in the files
-readerPlain = function(fname){
-  readPlain(elem = list(content = readLines(fname)), 
-            id = fname, language = 'en') }
+
+#class labels name modified cleaned 
+class_labels_train <- class_labels_train %>%
+  strsplit("/") %>%
+  lapply(tail,n = 1) %>%
+  lapply(paste0, collapse = "") %>%
+  unlist
+
+
 
 
 # read in the files and store them as a list
 all_files_train <- lapply(file_list_train, readerPlain)
 
 
-
-
-# give each file a representative name
+# give each file names
 file_names_train <- file_list_train %>%
   strsplit("/") %>%
   lapply(tail,n = 2) %>%
   lapply(paste0, collapse = "") %>%
   unlist
-# create a dataframe with doc_id as author-article and text as the text in that article
+
+
+
+
+#create a df with doc id as article and text - content of the article
+
 text_vector_train <- NULL
 for(i in 1:length(file_names_train)){
   text_vector_train <- c(text_vector_train, paste0(content(all_files_train[[i]]), collapse = " "))
 }
-
-
-
-# dataframe with text and document_id
-text_df_train <- data.frame(doc_id = file_names_train,
+# dataframe 
+df_train <- data.frame(doc_id = file_names_train,
                             text = text_vector_train)
-# convert the dataframe to a Corpus
-train_corpus_raw <- VCorpus(DataframeSource(text_df_train))
-# read in the test documents
-author_names_test <- dir("./ReutersC50/C50test")
+
+#str(df_train) there are 2500 obesrvations 2 variables (id and text)
+
+
+corpus_train = Corpus(DataframeSource(df_train))
+
+#pre processing for train data
+corpus_train = corpus_train %>% tm_map(., content_transformer(tolower)) %>% 
+        tm_map(., content_transformer(removeNumbers)) %>% 
+				tm_map(., content_transformer(removePunctuation)) %>%
+				tm_map(., content_transformer(stripWhitespace)) %>%
+				tm_map(., content_transformer(removeWords), stopwords("SMART")) %>%
+        tm_map(., content_transformer(removeWords), stopwords("en"))
+
+
+```
+
+
+```{r}
+
+##read in the test document, saame exact way as we did for the train 
+test_dirs<-Sys.glob('./ReutersC50/C50test/*')
 file_list_test <- NULL
 class_labels_test <- NULL
-for (name in author_names_test){
-  file_list_test <- c(file_list_test, Sys.glob(paste0('./ReutersC50/C50test/', name,'/*.txt')))
-  class_labels_test <- c(class_labels_test, rep(name, each = length(Sys.glob(paste0('./ReutersC50/C50test/', name,'/*.txt')))))
+
+
+for(author in test_dirs) {
+	
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list_test = append(file_list_test, files_to_add)
+	class_labels_test = append(class_labels_test, rep(author, length(files_to_add)))
 }
+
+#class labels name modified cleaned #attempt
+class_labels_test<- class_labels_test %>%
+  strsplit("/") %>%
+  lapply(tail,n = 1) %>%
+  lapply(paste0, collapse = "") %>%
+  unlist
+
+
 # read in the files and store them as a list
 all_files_test <- lapply(file_list_test, readerPlain)
-# give each file a representative name
+
+#give name like we did for train
 file_names_test <- file_list_test %>%
   strsplit("/") %>%
   lapply(tail,n = 2) %>%
@@ -628,16 +747,185 @@ file_names_test <- file_list_test %>%
   unlist
 # create a dataframe with doc_id as author-article and text as the text in that article
 text_vector_test <- NULL
+
 for(i in 1:length(file_names_test)){
   text_vector_test <- c(text_vector_test, paste0(content(all_files_test[[i]]), collapse = " "))
 }
 # dataframe with text and document_id
-text_df_test <- data.frame(doc_id = file_names_test,
+df_test <- data.frame(doc_id = file_names_test,
                            text = text_vector_test)
-# convert the dataframe to a Corpus
-test_corpus_raw <- VCorpus(DataframeSource(text_df_test))
-```
+
+
+
+corpus_test<-Corpus(DataframeSource(df_test))
+
+
+#pre processing for test data 
+corpus_test = corpus_test %>% tm_map(., content_transformer(tolower)) %>% 
+        tm_map(., content_transformer(removeNumbers)) %>% 
+				tm_map(., content_transformer(removePunctuation)) %>%
+				tm_map(., content_transformer(stripWhitespace)) %>%
+				tm_map(., content_transformer(removeWords), stopwords("SMART")) %>%
+        tm_map(., content_transformer(removeWords), stopwords("en"))
 
 ```
+
+
+
+**Creating Inverse Frequency Matrix**
+
+
+```{r DTM_matrix, include=TRUE, echo=TRUE}
+#DTm matrix for train and test corpus
+
+DTM_train<-DocumentTermMatrix(corpus_train)
+
+#remove uniqe terms from DTM_train
+
+DTM_train <- removeSparseTerms(DTM_train, 0.98)
+#> dim(DTM_train)
+#[1] 2500 1141
+## we can inspect its entries...
+#inspect(DTM_train[1:10,1:20])
+## ...find words with greater than a min count...
+#findFreqTerms(DTM_train, 50)
+
+#create term matrix but consider only terms that are inside the train matrix (there should be a better way to deal with new words, but I cant make any relevant code work)
+
+DTM_test<-DocumentTermMatrix(corpus_test, control=list(dictionary=Terms(DTM_train)))
+#dim(DTM_test)
+#[1] 2500 1141
+
+#calculate Term frequency matrix & IDF for each term in the DTM
+tfidf_train <- weightTfIdf(DTM_train)
+# inspect freq terms
+#inspect(tfidf_train[1,])
+
+
+tfidf_test <- weightTfIdf(DTM_test)
+
+#convert tfidf_train as matrix 
+tfidf_train_X <- as.matrix(tfidf_train)
+#dim is 50X1525
+
+#summary(tfidf_train_matrix)%>%kable()
+
+
+#matrix of test tfidf
+
+tfidf_test_X <- as.matrix(tfidf_test)
+
+```
+
+
+
+**PCA**
+
+
+
+
+```{r, include=TRUE, echo=TRUE}
+pca_train = prcomp(tfidf_train_X, scale=TRUE)
+plot(pca_train)
+
+#dim(pca_train$x)
+# [1] 2500 1141
+
+
+
+#look at the loadings 
+#pca_train$rotation[order(abs(pca_train$rotation[,1]),decreasing=TRUE),1][1:1000]
+#pca_train$rotation[order(abs(pca_train$rotation[,1]),decreasing=TRUE),2][1:1000]
+
+#summary(pca_train)$importance[3,]
+#pc194 explains more than 50% of the variance in  the data 
+```
+  
+  
+  
+  
+  
+```{r warning=FALSE, message=TRUE, echo=TRUE}
+tfidf_train_X <- pca_train$x[,1:194]
+tfidf_train_X <- cbind(tfidf_train_X, class_labels_train)
+loading_train <- pca_train$rotation[,1:194]
+
+
+
+
+
+# multiply to get a test matrix with the principal component values
+tfidf_test_X_pca <- scale(tfidf_test_X) %*% loading_train
+tfidf_test_X_pca <- as.data.frame(tfidf_test_X_pca)
 
   
+  
+  
+
+tfidf_train_X2  <- as.data.frame(tfidf_train_X)
+
+for (name in names(tfidf_train_X2 )){
+  if (name == "class_labels_train"){
+    next
+  }else{
+    tfidf_train_X2 [[name]] <- as.numeric(as.character(tfidf_train_X2 [[name]]))
+  }
+}
+
+tfidf_train_X2$class_labels_train <- as.factor(tfidf_train_X2$class_labels_train)
+
+
+#rm(list = c("all_files_test", "all_files_train", "df_test", "df_train",
+            #"train_dirs", "test_dirs", "file_list_test", "file_list_train", "i", "author", "text_vector_test",
+            #"text_vector_train", "file_names_test", "file_names_train", "DTM_test", "DTM_train", "pca_train",
+            #"corpus_test", "corpus_train", "tfidf_train", "tfidf_test"))
+
+
+
+
+
+
+
+# 
+
+```
+
+
+
+
+
+I created a training matrix tfidf_train_matrix2 and test matrix which is tfidf_test_matrix_pca. 
+This allows me to apply various models to predict author attribution and I chose Random Forests. Random Forests does a good job at predicting authors overall with relatively high accuracy. 
+
+
+
+**Random forests for author attribution**
+
+
+
+```{r, echo=TRUE}
+#RF is the simplest and my favorite to try as a starting model
+
+
+forest1<-randomForest(class_labels_train ~ .,
+                         data = tfidf_train_X2,
+                         ntree = 500)
+
+
+predict1 <- predict(forest1, tfidf_test_X_pca, type = "response")
+
+answer <- as.data.frame(table(predict1, class_labels_test))
+
+answer$correct <- ifelse(answer$predict1==answer$class_labels_test, 1, 0)
+
+answer_rf = answer %>% group_by(correct) %>% summarise("Correct" = sum(Freq))
+
+rf_accuracy <- sum(answer$Freq[answer$correct==1])*100/sum(answer$Freq)
+  
+print(paste0("Accuracy is ", rf_accuracy))
+
+```
+
+
+
+
