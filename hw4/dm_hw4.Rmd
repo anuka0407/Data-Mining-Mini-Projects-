@@ -10,10 +10,10 @@ always_allow_html: true
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE,
+knitr::opts_chunk$set(echo = FALSE,
                       warning=FALSE,
-                      message=FALSE,
-                      echo=FALSE)
+                      message=FALSE
+                      )
 
                       
                      
@@ -154,7 +154,7 @@ corrplot(cor(wine_num), type="upper", method="square", tl.cex=1)
 When we do clustering and PCA we need to normalize values in order to avoid measurements of different size to distort our analysis. We want mean of 0 and standard deviation of 1. To evaluate the optimal K for clustering in general it is useful to use the elbow plot shown below. *We should choose a number of clusters so that adding another cluster does not give much better partition of the data*. In this case elbow plot shows that K=3 could work, but since we know that we want to determine wine color either red or white , **I am using K=2 clusters**  (It is important to remember that we are using normalized data and color variable of interest is not included)
 
 
-\
+
 
 
 ```{r, data prep, include=FALSE}
@@ -207,7 +207,7 @@ wine_k2 <- kmeans(wine_norm, centers=2, iter.max=100, nstart=30)
 
 
 
-\\newpage
+\newpage
 
 
 \The plot below visualizes clustering with K=2 and table provides the number of red and white wines in each cluster. Clustering with ggpair graphs gives us cluster of 2 different color wines within different characteristics. 
@@ -247,7 +247,7 @@ ggpairs(cbind(wine_norm, Cluster=as.factor(wine_k2$cluster)),
 
 
 
-\\**PCA for wine color analysis** 
+\**PCA for wine color analysis** 
 
 
 
@@ -568,7 +568,7 @@ itemFrequencyPlot(tr, topN=20, type="absolute", col=brewer.pal(6, "Pastel2"), ma
   
   
   
-###  -**Generating Rules**
+###  **Generating Rules**
 
 We will use *APRIORI* algorithm in package *arules*. My specified Min support threshold will be 0.001, confidence level will be 0.4 (Higher confidence level gives very few associations, so I decided to choose the more optimal number)
 
@@ -589,7 +589,7 @@ inspectDT(association.rules)
  
  
  
-\As wee see whole milk is generally producing the highest sales. interactive visualized graphs are plotted below. It is easy to see that the strongest association is between drinks -- liquor,  wine and beer. Curd, other vegetables as well as milk products such as butter also are associated with whole milk.
+We see whole milk is generally producing the highest sales. interactive visualized graphs are plotted below. It is easy to see that the strongest association is between drinks -- liquor,  wine and beer. Curd, other vegetables as well as milk products such as butter also are associated with whole milk.
 
 
 *PS htmlwidgets gives us nice interactive graph but it wont knit on github output*

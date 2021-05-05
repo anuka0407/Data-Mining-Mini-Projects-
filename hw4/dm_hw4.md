@@ -634,11 +634,7 @@ determine wine color either red or white , **I am using K=2 clusters**
 (It is important to remember that we are using normalized data and color
 variable of interest is not included)
 
-  
-
 ![figure4](dm_hw4_files/figure-gfm/unnamed-chunk-6-1.png)
-
-\\newpage
 
 plot below visualizes clustering with K=2 and table provides the number
 of red and white wines in each cluster. Clustering with ggpair graphs
@@ -654,7 +650,7 @@ characteristics.
 
 ![cluster with pairs](dm_hw4_files/figure-gfm/unnamed-chunk-9-1.png)
 
-\\**PCA for wine color analysis**
+\*\*PCA for wine color analysis\*\*
 
 Principal component analysis (PCA) reduces the dimensionality of
 multivariate data, to two or three that can be visualized graphically
@@ -4500,7 +4496,7 @@ the same isle (butter& milk; vegetables and fruits) or go well together
 
 ![](dm_hw4_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
-### \-**Generating Rules**
+### **Generating Rules**
 
 We will use *APRIORI* algorithm in package *arules*. My specified Min
 support threshold will be 0.001, confidence level will be 0.4 (Higher
@@ -4513,7 +4509,7 @@ more optimal number)
     milk.
   - 51% who bought butter,root vegetables also bought whole milk.
 
-wee see whole milk is generally producing the highest sales. interactive
+We see whole milk is generally producing the highest sales. interactive
 visualized graphs are plotted below. It is easy to see that the
 strongest association is between drinks – liquor, wine and beer. Curd,
 other vegetables as well as milk products such as butter also are
