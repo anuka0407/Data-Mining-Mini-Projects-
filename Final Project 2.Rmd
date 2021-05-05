@@ -1,0 +1,235 @@
+---
+title: "Final Project Draft"
+author: "Maria Gilbert and Anuka Revi"
+date: "4/23/2021"
+output:
+  pdf_document: default
+  md_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning= FALSE,
+                      message=FALSE,
+                      include=FALSE)
+```
+
+# **Predicting Birthright for Babies**
+
+
+## **Abstract**
+
+summary of our questions, methods, results, and conclusions in a few 100 words
+
+## **Introduction**
+
+Baby announcements are sweet and memorable. Expecting parents usually know their approximate due date at the beginning of the pregnancy and learn about their baby's gender at around 20 weeks mark. While gender reveal, time of birth and name of the new baby are all exciting and great news for the entire family to have, OB-GYNS mostly look at baby's development, growth and their weight. Estimating baby weight in particular is very important, since a large size baby can pose serious injuries to the baby and its mother. Ultrasounds are often used to estimate baby's weight, but they are not always accurate. When I was over 40 weeks pregnant, my doctor told me that the baby was an average size and I didnot need to be induced, however my daughter was born over 8.9lbs which was significantly larger than the estimated size and it made my delivery more complicated. So While exploring my project ideas, I came across to the NBER natality birth data from 2018 that contained the features of the baby like birth date, gender, medical conditions of the birth mother, number of children born etc. My goal is to predict the birthright of the baby depending on the week of pregnancy. Better estimations used by doctors  should mean easier deliveries and less complications and its interesting to see how machine learning tools could help us estimate the birthweight. 
+
+
+
+
+
+## **Methods**
+
+
+
+My dataset birthweight18.csv contains 20,000 randomly chosen samples, for births that occurred between 37 and 39 weeks of gestation, from 2018 U.S. data files
+(<https://www.nber.org/research/data/vital-statistics-natality-birth-data>). There are 39 variables that were chosen from the initial 142 variables on the dataset. These include a unique identifier, birth month (1-12), birth time, sex, birthweight (grams), age of the mother (years), whether or not the mother was born in the U.S., whether or not the baby was born in a hospital; the race, marital status, and education level of the mother; the age, race, and education level of the father, the number of prior live births, the number of prior term births, whether or not the mother was on WIC during pregnancy, indicators for whether the mother had at least one, two, or three cigarettes during pregnancy, the mother's height (inches), the mother's BMI, the mother's pre-pregnancy weight (lb), the amount of weight the mother gained during pregnancy (lb), whether or not the mother had gestational diabetes, hypertension eclampsia, infertility treatment, a previous cesarian section birth, induced labor, anesthesia, ruptured uterus, and/or perineal laceration, whether the birth was vaginal or c-section, whether the birth was attended by a medical doctor or a midwife, and total number of weeks of gestation. We are excluding cases of multiples (twins, triplets, etc.) and pre-term births. 
+
+We are hoping to create a model that can predict a baby's weight based on factors that would be known prior to starting labor, and a separate model that can predict a baby's weight based on factors that would be known upon live birth, prior to the actual weighing of the baby. So far, we have worked to clean the data and figure out which variables are the most correlated with birth weight. I was able to get a random forest model working that included weight gain, pre-pregnancy weight, BMI, total gestation weeks, mother's education, father's age, mother's age, prenatal visits, birth month, father's education, father's race, sex, mother's race, mother's marital status, whether labor was induced, previous cesarian, anesthesia, gestational diabetes, mother's birthplace, doctor versus midwife, perineal laceration, infertility treatment, and hospital versus not (in descending order of variable importance), however I could only get the model to work in an R script, it would not knit on R Markdown so we are still working on that. 
+
+
+## **Data Exploration**
+
+```{r,echo=FALSE}
+
+library(tidyverse)
+library(janitor)
+library(xgboost)
+library(skimr)
+library(data.table)
+library(ggcorrplot)
+library(psych)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(FNN)
+library(class)
+library(rsample)
+library(caret)
+library(modelr)
+library(parallel)
+library(foreach)
+library(randomForest)
+library(gbm)
+library(pdp)
+
+birthweight_new <- read.csv("~/Downloads/birthweight_new.csv")
+
+```
+
+```{r,echo=FALSE}
+
+### Create list of columns with missing values
+na99<-c("combgest", "apgar5", "wtgain", "m_ht_in",
+        "previs", "illb_r11", "priorterm", "priorlive", "fagecomb")
+
+#na999<-("pwgt_r")
+
+
+na9999<-c("dbwt", "dob_tt")
+
+
+#na99.9<- ("bmi")
+
+### Replace missing values with NA
+
+birthweight_new[ ,na99][birthweight_new[ ,na99] == 99] <- NA
+birthweight_new[ ,na9999][birthweight_new[ ,na9999] == 9999] <- NA
+birthweight_new$pwgt_r[birthweight_new$pwgt_r==999]<-NA
+birthweight_new$bmi[birthweight_new$bmi==99.9]<-NA
+birthweight_new$no_infec[birthweight_new$no_infec==9]<-NA
+birthweight_new$dmeth_rec[birthweight_new$dmeth_rec==9]<-NA
+birthweight_new$attend[birthweight_new$attend==9]<-NA
+birthweight_new$illb_r11[birthweight_new$illb_r11==88]<-NA
+
+```
+
+```{r,echo=FALSE}
+
+birthweight_new <- rename(birthweight_new,
+                              birth_month = dob_mm,
+                              birth_time = dob_tt,
+                              birth_weight = dbwt,
+                              mother_age = mager,
+                              mother_birthplace = mbstate_rec,
+                              hospital = bfacil3,
+                              mother_race = mrace6,
+                              mother_maritalstatus = dmar,
+                              mother_education = meduc,
+                              father_combinedage = fagecomb,
+                              father_race = frace6,
+                              father_education = feduc,
+                              time_sincelastbirth = illb_r11,
+                              prenatal_visits = previs,
+                              prepreg_weight = pwgt_r,
+                              gest_diabetes = rf_gdiab,
+                              hypertension_eclampsia = rf_ehype,
+                              infertility_treatment = rf_inftr,
+                              previous_cesarian = rf_cesar,
+                              no_infections = no_infec,
+                              labor_induced = ld_indl,
+                              anesthesia = ld_anes,
+                              delivery_method = dmeth_rec,
+                              ruptured_uterus = mm_rupt,
+                              perineal_laceration = mm_plac,
+                              plurality = dplural,
+                              combined_gestation = combgest,
+                              under_37weeks = gestrec3,
+                              breastfed = bfed
+)
+
+```
+
+```{r,echo=FALSE}
+
+birthweight_new$mother_race <- as.factor(birthweight_new$mother_race)
+birthweight_new$mother_birthplace <- as.factor(birthweight_new$mother_birthplace)
+birthweight_new$mother_education <- as.factor(birthweight_new$mother_education)
+birthweight_new$hospital <- as.factor(birthweight_new$hospital)
+birthweight_new$father_race <- as.factor(birthweight_new$father_race)
+birthweight_new$mother_maritalstatus <- as.factor(birthweight_new$mother_maritalstatus)
+birthweight_new$time_sincelastbirth <- as.factor(birthweight_new$time_sincelastbirth)
+birthweight_new$delivery_method <- as.factor(birthweight_new$delivery_method)
+birthweight_new$attend <- as.factor(birthweight_new$attend)
+birthweight_new$gest_diabetes <- as.factor(birthweight_new$gest_diabetes)
+birthweight_new$hypertension_eclampsia <- as.factor(birthweight_new$hypertension_eclampsia)
+birthweight_new$infertility_treatment <- as.factor(birthweight_new$infertility_treatment)
+birthweight_new$previous_cesarian <- as.factor(birthweight_new$previous_cesarian)
+birthweight_new$labor_induced <- as.factor(birthweight_new$labor_induced)
+birthweight_new$anesthesia <- as.factor(birthweight_new$anesthesia)
+birthweight_new$ruptured_uterus <- as.factor(birthweight_new$ruptured_uterus)
+birthweight_new$perineal_laceration <- as.factor(birthweight_new$perineal_laceration)
+birthweight_new$breastfed <- as.factor(birthweight_new$breastfed)
+
+```
+
+```{r,echo=FALSE}
+
+levels(birthweight_new$mother_race) <- list("white"="10","black"="20","asian"="40","NHOPI"="50","more than 1 race"="60")
+
+levels(birthweight_new$mother_birthplace) <- list("born in the U.S."="1","born outside the U.S."="2","unknown"="3")
+
+levels(birthweight_new$mother_education) <- list("1-8 grade"="1","9-12 grade no HS"="2","HS diploma"="3","some college"="4","AA AS"="5","BA BS"="6","MA MS"="7","PhD EdD"="8")
+
+levels(birthweight_new$hospital) <- list("Hospital"="1","Not Hospital"="2","Unknown"="3")
+
+levels(birthweight_new$father_race) <- list("white"="1","black"="2","AIAN"="3","asian"="4","NHOPI"="5","more than 1 race"="6","unknown"="9")
+
+levels(birthweight_new$mother_maritalstatus) <- list("married"="1","unmarried"="2","unmarried"="3","unknown"="9")
+
+levels(birthweight_new$time_sincelastbirth) <- list("less than 18 months"="00","less than 18 months"="01","less than 2 years"="02","less than 2 years"="03","less than 4 years"="04","less than 4 years"="05","less than 6 years"="06","less than 6 years"="07","unknown"="99")
+
+levels(birthweight_new$delivery_method) <- list("Vaginal"="1","Vaginal"="2","Vaginal"="5","C-section"="3","C-section"="4","C-section"="6")
+
+levels(birthweight_new$attend) <- list("Doctor"="1","Doctor"="2","midwife"="3","midwife"="4","other"="5")  
+
+```
+
+```{r,echo=FALSE}
+
+g <- ggplot(birthweight_new, aes(birth_weight)) + scale_fill_brewer(palette = "Spectral")
+
+g + geom_histogram(aes(fill=sex), 
+                   binwidth = 200, 
+                   col="black", 
+                   
+) + labs(title="Histogram of Birthweight", 
+         subtitle="Birthweight and Sex of the infant")  + scale_x_continuous(name="Birthweight, in grams",breaks=seq(0,6000,500)) + scale_y_continuous(name="Number of births",breaks=seq(0,9000,1000))
+
+```
+
+```{r,echo=FALSE}
+
+week37to39 <- birthweight_new %>%
+  filter(!is.na(birth_weight)) %>%
+  filter(combined_gestation=="37" | combined_gestation=="38" | combined_gestation=="39") %>%
+  filter(plurality=="1")
+week37to39$time_sincelastbirth <- NULL
+week37to39 <- na.omit(week37to39)
+
+```
+
+```{r,echo=FALSE}
+
+set.seed(123)
+week37to39_split = initial_split(week37to39)
+n = nrow(week37to39)
+n_train = floor(0.8*n)
+n_test = n - n_train
+train_cases = sample.int(n, size=n_train, replace=FALSE)
+week37to39_train = training(week37to39_split)
+week37to39_test = testing(week37to39_split)
+
+```
+
+```{r,echo=FALSE}
+
+forest1 = randomForest(birth_weight ~ . - X - plurality - breastfed - under_37weeks - apgar5,distribution="gaussian",data=week37to39_train,interaction.depth=4,n.trees=500,shrinkage=.05)
+yhat_test = predict(forest1,week37to39_test)
+varImpPlot(forest1)
+rmse(forest1,week37to39_test)
+
+```
+
+```{r,echo=FALSE}
+
+lm1 = lm(birth_weight ~ birth_time + birth_month + sex + mother_age + mother_birthplace + hospital + mother_race + mother_maritalstatus + mother_education + father_combinedage + father_race + father_education + priorlive + priorterm + prenatal_visits + wic + f_cigs_1 + f_cigs_2 + f_cigs_3 + m_ht_in + bmi + prepreg_weight + wtgain + gest_diabetes + hypertension_eclampsia + infertility_treatment + previous_cesarian + labor_induced + anesthesia + ruptured_uterus + perineal_laceration + attend + combined_gestation,data=week37to39_train)
+
+lm_step = step(lm1, scope=~(.)^2)
+
+rmse(lm_step,week37to39_test)
+
+```
+
