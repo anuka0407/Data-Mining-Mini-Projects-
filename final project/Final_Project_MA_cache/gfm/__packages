@@ -1,10 +1,4 @@
 base
-methods
-datasets
-utils
-grDevices
-graphics
-stats
 tidyverse
 ggplot2
 tibble
@@ -28,8 +22,8 @@ FNN
 class
 rsample
 modelr
-parallel
 foreach
 randomForest
 gbm
 pdp
+hrbrthemes
