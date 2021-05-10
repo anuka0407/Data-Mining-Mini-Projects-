@@ -13,9 +13,10 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 
+
+
+
 ```{r}
-
-
 library(tidyverse)
 library(janitor)
 library(xgboost)
@@ -23,11 +24,8 @@ library(skimr)
 library(data.table)
 library(ggcorrplot)
 library(psych)
-library(ggplot2)
 library(dplyr)
-library(caret)
-library(lubridate)
-
+library(ggplot2)
 library(scales)
 library(FNN)
 library(class)
@@ -42,11 +40,37 @@ library(pdp)
 
 
 
+```
 
+
+# **Part I**
+
+
+-**Preparation and pre-processing of the data:** 
+
+
+
+NBER has a collection of vital statistics birth microdata which contains birth certificate data from a given calendar year, in our case 2018. We chose appropriate variables for our analysis which included BMI, height, race and education of mother, as well as some pregnancy associated characteristics. Prior analysis, we converted categorical variables into factors and encoded them with the help of the codebook provided for this dataset. We replaced unknown variables that were coded as 99, 999, or 9999 with NA values and renamed variables to make more intuitive for readers. Since we were interested in birthweight outcome, we decided to filter the data and focus on babies who were born on 37 to 40 weeks mark, since there is a causal relationship between week of gestation and the potential birthweight outcome. As we would expect, babies who are born at 37-40 weeks mark weigh more than premature babies. 
+
+
+
+
+
+-**Missing Data:**
+
+
+
+In our data *week37to40* we have 2134 missing values which is small compared to total 1159808 observed values,  mother_race contains 2061 missing values and mothers  education contains 73 missing values. Since NA values are than than 10% of our data set it makes sense to just eliminate them.
+
+
+
+
+
+```{r, warning=FALSE}
 #load data 
 
-birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
 
+birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
 
 ### Create list of columns with missing values
 na99<-c("combgest", "apgar5", "wtgain", "m_ht_in",
@@ -72,7 +96,6 @@ birthweight_new$attend[birthweight_new$attend==9]<-NA
 birthweight_new$illb_r11[birthweight_new$illb_r11==88]<-NA
 
 # convert some variables as factors with levels
-
 birthweight_new <- rename(birthweight_new,
                               birth_month = dob_mm,
                               birth_time = dob_tt,
@@ -105,16 +128,56 @@ birthweight_new <- rename(birthweight_new,
                               breastfed = bfed
 )
 
+
+#create factors 
 birthweight_new$mother_race <- as.factor(birthweight_new$mother_race)
 birthweight_new$mother_birthplace <- as.factor(birthweight_new$mother_birthplace)
 birthweight_new$mother_education <- as.factor(birthweight_new$mother_education)
 birthweight_new$hospital <- as.factor(birthweight_new$hospital)
 birthweight_new$father_race <- as.factor(birthweight_new$father_race)
 birthweight_new$mother_maritalstatus <- as.factor(birthweight_new$mother_maritalstatus)
-birthweight_new$time_sincelastbirth <- as.factor(birthweight_new$time_sincelastbirth)
 birthweight_new$delivery_method <- as.factor(birthweight_new$delivery_method)
 birthweight_new$attend <- as.factor(birthweight_new$attend)
-birthweight_new$sex <- as.factor(birthweight_new$sex)
+birthweight_new$gest_diabetes <- as.factor(birthweight_new$gest_diabetes)
+birthweight_new$hypertension_eclampsia <- as.factor(birthweight_new$hypertension_eclampsia)
+birthweight_new$infertility_treatment <- as.factor(birthweight_new$infertility_treatment)
+birthweight_new$previous_cesarian <- as.factor(birthweight_new$previous_cesarian)
+birthweight_new$labor_induced <- as.factor(birthweight_new$labor_induced)
+birthweight_new$anesthesia <- as.factor(birthweight_new$anesthesia)
+birthweight_new$ruptured_uterus <- as.factor(birthweight_new$ruptured_uterus)
+birthweight_new$perineal_laceration <- as.factor(birthweight_new$perineal_laceration)
+birthweight_new$breastfed <- as.factor(birthweight_new$breastfed)
+
+
+#remove time since last birth from the data, not really useful for our analysis 
+birthweight_new$time_sincelastbirth <-NULL
+
+
+#take care of missing values since missing data in total is less that 10% we will not impute and just drop NA values
+birthweight_new<-na.omit(birthweight_new)
+
+
+
+
+## **use lubridate to have months and time in correct R format
+#
+#try this  birthweight_new<-birthweight_new %>% 
+
+
+
+#######****** #STILL CANT MAKE THIS WORK
+
+#birthweight_new<-birthweight_new%>%
+  #mutate(time=lubridate::hm(birth_time, label=FALSE))
+
+         
+         #Error in `$<-.data.frame`(`*tmp*`, time, value = new("Period", .Data = c(NA_real_,  : 
+#  replacement has 37707 rows, data has 37706
+#> dim(birthweight_new)
+#[1] 37706    42
+
+
+birthweight_new$birth_month<-lubridate::month(birthweight_new$birth_month, label=FALSE)
 
 levels(birthweight_new$mother_race) <- list("white"="10","black"="20","asian"="40","NHOPI"="50","more than 1 race"="60")
 levels(birthweight_new$mother_birthplace) <- list("born in the U.S."="1","born outside the U.S."="2","unknown"="3")
@@ -122,66 +185,93 @@ levels(birthweight_new$mother_education) <- list("1-8 grade"="1","9-12 grade no 
 levels(birthweight_new$hospital) <- list("Hospital"="1","Not Hospital"="2","Unknown"="3")
 levels(birthweight_new$father_race) <- list("white"="1","black"="2","AIAN"="3","asian"="4","NHOPI"="5","more than 1 race"="6","unknown"="9")
 levels(birthweight_new$mother_maritalstatus) <- list("married"="1","unmarried"="2","unmarried"="3","unknown"="9")
-levels(birthweight_new$time_sincelastbirth) <- list("less than 18 months"="00","less than 18 months"="01","less than 2 years"="02","less than 2 years"="03","less than 4 years"="04","less than 4 years"="05","less than 6 years"="06","less than 6 years"="07","unknown"="99")
+#(birthweight_new$time_sincelastbirth) <- list("less than 18 months"="00","less than 18 months"="01","less than 2 years"="02","less than 2 years"="03","less than 4 years"="04","less than 4 years"="05","less than 6 years"="06","less than 6 years"="07","unknown"="99")
 levels(birthweight_new$delivery_method) <- list("Vaginal"="1","Vaginal"="2","Vaginal"="5","C-section"="3","C-section"="4","C-section"="6")
 levels(birthweight_new$attend) <- list("Doctor"="1","Doctor"="2","midwife"="3","midwife"="4","other"="5")  
 
 
 
-week37to39 <- birthweight_new %>%
+week37to40 <- birthweight_new %>%
   filter(!is.na(birth_weight)) %>%
-  filter(combined_gestation=="37" | combined_gestation=="38" | combined_gestation=="39") %>%
+  filter(combined_gestation=="37" | combined_gestation=="38" | combined_gestation=="39"| combined_gestation=="40") %>%
   filter(plurality=="1")
-week37to39$time_sincelastbirth <- NULL
-week37to39 <- na.omit(week37to39)
+
+```
 
 
 
-g <- ggplot(birthweight_new, aes(birth_weight)) + scale_fill_brewer(palette = "Spectral")
+
+
+```{r}
+
+
+#is.na(week37to40)%>%table()
+
+#  FALSE    TRUE 
+#1157674    2134 
+
+NAcol <- which(colSums(is.na(week37to40)) > 0)
+
+sort(colSums(sapply(week37to40[NAcol], is.na)), decreasing = TRUE)
+
+
+week37to40 <- na.omit(week37to40)
+
+
+
+```
+
+
+
+
+-**Visualizing birthright distribution**
+
+
+
+By visualizing the data, we see that there are some variables that are strongly related to one another, such as mother age with fathers age and BMI with pre-pregnancy weight. None of the variables are strongly correlated with birthright  which is our variable of interest. 
+
+
+
+
+```{r, fig.cap="Birthweight Distriburion", include=TRUE}
+  
+
+#histogram of baby weight for gestational weeks 37-40
+g <- ggplot(week37to40, aes(birth_weight)) + scale_fill_brewer(palette = "Spectral")
 
 g + geom_histogram(aes(fill=sex),
                    binwidth = 200,
                    col="black",
                    
-) + labs(title="Histogram of Birthweight",
+) + labs(title="Histogram of Birthweight for gestational weeks 37 to 40",
          subtitle="Birthweight and Sex of the infant")  + scale_x_continuous(name="Birthweight, in grams",breaks=seq(0,6000,500)) + scale_y_continuous(name="Number of births",breaks=seq(0,9000,1000))
-  
-
-
-
-#boost1 = gbm(birth_weight ~ . - X - plurality - breastfed,distribution="gaussian",data=week37to39_train,interaction.depth=4,n.trees=500,shrinkage=.05)
-#gbm.perf(boost1)
-#boost1
 
 
 
 
-#correlation 
-num_cols <- unlist(lapply(birthweight_new, is.numeric))         # Identify numeric columns
-data_num <- birthweight_new[, num_cols]   
+
+
+#correlation for variables 
+num_cols <- unlist(lapply(week37to40, is.numeric))         # Identify numeric columns
+data_num <- week37to40[, num_cols]   
 data_num<-na.omit(data_num)
 
 
-corr<-round(cor(data_num),2)
-ggcorrplot(corr, hc.order = TRUE, 
-           type = "lower", 
+corr<-cor(data_num,use="pairwise.complete.obs")%>%round(2)
+
+
+ggcorrplot(corr, hc.order = FALSE,
            lab = TRUE, 
-           lab_size = 3, 
-           method="square", 
+           lab_size = 3,
+           method="square",
            colors = c("tomato2", "white", "springgreen3"), 
            title="Correlogram of birthweight variables", 
            ggtheme=theme_bw)
 
 #summary(birthweight_new)
-#remove time since last birth, not really useful 
-birthweight_new$time_sincelastbirth <-NULL
 
-#skim(birthweight_new)
 
-#take care of missing values
-birthweight_new<-na.omit(birthweight_new)
 
-birthweight_new%>%mutate(birth_month=month(birth_month, label=TRUE), birth_time=hm(birth_time))
  
 #skim(birthweight_new)
 
@@ -191,23 +281,359 @@ birthweight_new%>%mutate(birth_month=month(birth_month, label=TRUE), birth_time=
 
 
 
-```{r, cache=TRUE}
+
+
+
+
+
+
+-**Random Forest and XGBOOST**
+
+Although the correlations are giving a good overview of the most important numeric variables and multicolinerity among those variables, I wanted to get an overview of the most important variables including the categorical variables before moving on to visualization. Random Forest allows us to find the variable importance without much effort or parameter tuning but slightly longer than desired time. As we would expect some of the most important variables are combined_gestation, weight gain during pregnancy, pre-pregnancy weight, mother's BMI and height, as well as mother's race & age,  prior live birth and sex of the baby. RMSE of Random Forest model was 408.2254. 
+
+
+We also included the distribution of some of the most important variables in determining the birthweight. Visualizing relationships between birth_weight and three most important variables - weight gain, mother's height in inches and mothers age we see non-linear relationships. This made us speculate that non linear model might be a best predictor for birth weight as numerical value so we decided to employ KNN model.
+
+
+
+
+
+```{r, cache=TRUE, echo=TRUE, include=TRUE}
+
+##Random Forest 
 set.seed(1234)
-week37to39_split = initial_split(week37to39)
-n = nrow(week37to39)
+week37to40_split = initial_split(week37to40)
+n = nrow(week37to40)
 n_train = floor(0.8*n)
 n_test = n - n_train
 train_cases = sample.int(n, size=n_train, replace=FALSE)
-week37to39_train = training(week37to39_split)
-week37to39_test = testing(week37to39_split)
+week37to40_train = training(week37to40_split)
+week37to40_test = testing(week37to40_split)
 
 
 
-forest1 = randomForest(birth_weight ~ . - X - plurality - breastfed - under_37weeks - apgar5,distribution="gaussian",data=week37to39_train,interaction.depth=4,n.trees=500,shrinkage=.05)
-yhat_test = predict(forest1,week37to39_test)
-varImpPlot(forest1)
-rmse(forest1,week37to39_test)
+forest1 = randomForest(birth_weight ~ . - X - breastfed - under_37weeks - apgar5 - birth_time, distribution="gaussian",data=week37to40_train, n.trees=100, importance=TRUE)
+
+imp_forest1<-importance(forest1)
+imp_DF <- data.frame(Variables = row.names(imp_forest1), MSE = imp_forest1[,1])
+imp_DF <- imp_DF[order(imp_DF$MSE, decreasing = TRUE),]
+
+ggplot(imp_DF[1:20,], aes(x=reorder(Variables, MSE), y=MSE, fill=MSE)) + geom_bar(stat = 'identity') + labs(x = 'Variables', y= '% increase MSE if variable is randomly permuted') + coord_flip() + theme(legend.position="none")
+
+
+
+
+yhat_test = predict(forest1, week37to40_test)
+rmse(forest1,week37to40_test)
+#1] 408.2254
 ```
+
+
+
+
+-*Graphs to visualize relationship between some of most important variables and birthweight*
+ 
+
+```{r, warning=FALSE, include=TRUE}
+library(hrbrthemes)
+
+
+s1=ggplot(week37to40, aes(x=combined_gestation)) + 
+    geom_density() +
+    theme_classic()+ labs(x='Combined Gestation')
+
+s2=ggplot(week37to40, aes(x=wtgain)) + 
+    geom_density() +
+    theme_classic()+ labs(x='Weightgain During Pregnancy')
+
+
+s3=ggplot(week37to40, aes(x=m_ht_in)) + 
+    geom_density() +
+    theme_classic()+ labs(x='Mother Height (Inches)')
+
+
+s4=ggplot(week37to40, aes(x=mother_age)) + 
+    geom_density() +
+    theme_classic()+ labs(x='Mother Age')
+
+
+s5=ggplot(data=week37to40, aes(x=as.factor(mother_race))) +
+        geom_histogram(stat='count') + labs(x='Mother Race')
+
+
+source("http://peterhaschke.com/Code/multiplot.R")
+multiplot(s1,s2,s3,s4,s5,cols=2)
+
+```
+
+
+```{r, warning=FALSE, message=FALSE, include=TRUE}
+
+g1<-ggplot(data=week37to40, aes(x=combined_gestation, y=birth_weight))+
+        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black") 
+        
+g2<-ggplot(data=week37to40, aes(x=wtgain, y=birth_weight))+
+        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black") 
+      
+
+g3<-ggplot(data=week37to40, aes(x=prepreg_weight, y=birth_weight))+
+        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black")
+
+
+g4<-ggplot(data=week37to40, aes(x=m_ht_in, y=birth_weight))+
+        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black")
+
+
+source("http://peterhaschke.com/Code/multiplot.R")
+multiplot(g1,g2,g3,g4,cols=2)
+
+```
+
+
+
+
+
+## *Worflow that wont be all included in our final md draft*
+
+
+
+We tried linear stepwise selection and Lasso glmnet models (*we have to briefly explain how each model works*), and used RMSE as our evaluation metrics on test set. Lasso glmnet gave us better prediction accuracy with lower RMSE value of 13.25. 
+
+
+
+
+
+**Linear Model with Step Function**
+
+
+```{r, include=FALSE, cache=TRUE}
+
+## for LM and glmnet models, we should drop variables that are highly correlated with one another as we saw from above crr matrix and create a new data frame with uncorrealted variables '
+
+
+week37to40_uncorr <- week37to40 %>% select (birth_weight, mother_age, birth_month, father_education, priorlive, priorterm, prenatal_visits, f_cigs_1, m_ht_in, bmi, wtgain, no_infections, apgar5, combined_gestation,  sex, mother_birthplace, mother_race, mother_maritalstatus,hypertension_eclampsia, infertility_treatment, previous_cesarian, labor_induced, anesthesia, ruptured_uterus, perineal_laceration, attend)
+
+
+
+
+#train test split on new dataframe
+
+set.seed(1234)
+week37to40_split_uncorr = initial_split(week37to40_uncorr)
+n_uncorr = nrow(week37to40_uncorr)
+n_train_uncorr = floor(0.8*n_uncorr)
+n_test_uncorr = n_uncorr - n_train_uncorr
+train_cases_uncorr = sample.int(n_uncorr, size=n_train_uncorr, replace=FALSE)
+week37to40_train_uncorr = training(week37to40_split_uncorr)
+week37to40_test_uncorr = testing(week37to40_split_uncorr)
+
+
+
+#lm model with stepwise selection 
+lm1 = lm(birth_weight ~ ., data=week37to40_train_uncorr)
+
+lm_step = step(lm1, scope=~(.)^2)
+
+rmse(lm_step,week37to40_test_uncorr)
+#prediction from a rank-deficient fit may be misleading[1] 405.8615
+
+#lm1 = lm(birth_weight ~ birth_time + birth_month + sex + mother_age + mother_birthplace + hospital + mother_race + mother_maritalstatus + mother_education + father_combinedage + father_race + father_education + priorlive + priorterm + prenatal_visits + wic + f_cigs_1 + f_cigs_2 + f_cigs_3 + m_ht_in + bmi + prepreg_weight + wtgain + gest_diabetes + hypertension_eclampsia + infertility_treatment + previous_cesarian + labor_induced + anesthesia + ruptured_uterus + perineal_laceration + attend + combined_gestation,data=week37to39_train)
+
+
+```
+
+
+
+
+
+- **Lasso with glmnet**
+
+```{r, include=TRUE, echo=TRUE}
+library(ISLR)
+library(glmnet)
+library(dplyr)
+library(tidyr)
+
+
+
+
+set.seed(1234)
+y_train<-week37to40_train_uncorr%>%select(birth_weight)%>%
+  unlist()%>%
+  as.numeric()
+
+y_test<-week37to40_test_uncorr%>%select(birth_weight)%>%
+  unlist()%>%
+  as.numeric()
+
+
+
+x_train<-week37to40_train_uncorr %>% 
+  data.matrix()
+
+x_test<-week37to40_test_uncorr %>%
+  data.matrix()
+
+
+
+grid<-10^seq(10,-2,length=100)
+  
+  
+#fit lasso model 
+lasso_mod<-glmnet(x_train, y_train, alpha=1, lambda=grid)
+
+plot(lasso_mod)  #draw plot of coefficients
+
+
+set.seed(12)
+cv_fit<-cv.glmnet(x_train,y_train, alpha=1) #fit lasso on training data  #alpha=0 ->ridge model if 1 ->lasso model 
+
+
+plot(cv_fit) #DRaw plot of training MSE as a fucntio of lambda
+opt_lambda<-cv_fit$lambda.min #select lambda that minimizes training mSE
+print(paste("best labda value is", opt_lambda))
+
+
+lasso_pred<-predict(lasso_mod, s=opt_lambda, newx=x_test) #use best lambda to predict test data
+
+rmse_test<-sqrt(mean((lasso_pred-y_test)^2))
+print(paste("Test RMSE is", rmse_test))
+
+
+#IDK why i cant get variable importance please ask your brother 
+lassoVarImp <- varImp(lasso_mod,lambda=opt_lambda, scale=F)
+lassoImportance <- lassoVarImp$importance
+
+varsSelected <- length(which(lassoImportance$Overall!=0))
+varsNotSelected <- length(which(lassoImportance$Overall==0))
+
+cat('Lasso uses', varsSelected, 'variables in its model, and did not select', varsNotSelected, 'variables.')
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+**XGBOOST model for regression"
+
+
+First objective was to predict exact birth weight for babies who are born at 37 to 40 weeks gestation mark (which is counted as full term pregnancy). Lasso model and tree models did that with higher accuracy that step wise selection of OLS model,
+
+
+The second goal was to predict whether babies born from 37 to 40 weeks of gestation were underweight or not. For this binary outcome model we used Xgboost that gave us low accuracy. 
+
+
+
+```{r, echo=TRUE, include=TRUE}
+
+#Conversion from categorical to numerical values - one hot encoding
+
+# 1. create new categorical variable fro moms age that are greater than 35 ( high risk pregnancy)
+# 2. babies that are underweight VS not underweight
+# 3. Grouping per 5 years  so that algorithm treats that as independent values thus 20 is not closer to 30 than 60. thus distance between ages is lost in this transformation
+
+week37to40_new<-week37to40%>%
+  mutate(underweight=as.factor(ifelse(birth_weight<2500, "underweight", "not underweight")),
+         agediscrete=as.factor(round(mother_age/10,0)),
+         risk=as.factor(ifelse(mother_age>35, "high risk", "low risk")))
+
+
+
+#remove X because there is nothing to learn from X that stands as ID 
+
+week37to40_new$X<-NULL
+
+#train test split with caret 
+set.seed(123)
+
+week37to40_new_split = initial_split(week37to40_new)
+nrow = nrow(week37to40_new)
+n_train_new = floor(0.8*nrow)
+n_test_new = nrow - n_train_new
+train_cases = sample.int(nrow, size=n_train_new, replace=FALSE)
+week37to40_new_train = training(week37to40_new_split)
+week37to40_new_test = testing(week37to40_new_split)
+
+
+#unlinke GLM that assumes that feautures are uncorrelated in order to predict more accurate outcomes. decision tree algorithms including boosted trees are robust to these feautures. thus we do nothave to worry about correlated feautures!
+
+
+
+ # **ONE HOT ENCODING***
+#transform categorical data to dummy variables (the purpose is to transform each value of the each categorical feauture into a binary feauture {0,1}.
+
+sparse_matrix<-sparse.model.matrix(underweight~.-1, data = week37to40_new_train)
+sparse_matrix_test<-sparse.model.matrix(underweight~.-1, data=week37to40_new_test)
+
+
+
+
+
+#create output numeric vector (not as a sparse matrix)
+output_vector=as.numeric(week37to40_new_train$underweight=="underweight")
+output_vector_test=as.numeric(week37to40_new_test$underweight=="underweight")
+ 
+  ##build the model
+bst_boost<-xgboost(data=sparse_matrix, label=output_vector, max.depth=4, eta=0.2, nthread=2, nround=10, objective="binary:logistic")
+pred_boost<-predict(bst_boost, sparse_matrix_test)
+err_boost<-as.numeric(sum(as.integer(pred_boost>0.5)!=output_vector_test))/length(output_vector_test)
+print(paste("test-error=", err_boost))
+
+
+ #feature importance looks weird
+ 
+importance_boost<-xgb.importance(model=bst_boost)
+
+print(xgb.plot.importance(importance_matrix = importance_boost, top_n=10))
+
+
+###I think bst_ boost is NOT  done correctly for predicting whether we had uderweight or overweight coz it sounds too good to be true test_error of 0. 
+
+ 
+ #linear boosting
+dtrain<-xgb.DMatrix(data=sparse_matrix, label=output_vector)
+dtest<-xgb.DMatrix(data=sparse_matrix_test, label=output_vector_test)
+bst_linear<-xgb.train(data=dtrain, booster="gblinear", nthread=2, nrounds=2, objective="binary:logistic")
+
+pred<-predict(bst_linear, dtest)
+err<-as.numeric(sum(as.integer(pred>0.5)!=output_vector_test))/length(output_vector_test)
+print(paste("test-error=", err))
+ 
+ #feature importance 
+ 
+importance<-xgb.importance(colnames(dtrain), model=bst_linear)
+
+print(xgb.plot.importance(importance_matrix = importance, top_n=10))
+
+
+
+#gain is the improvement in  accuracy brought by a feauture to the branches it is on, thei ide is that before adding a new spolit there was a wrongly classifid elements after adding a split on ths feauture there are 2 new branches  and each of these branch is more accurate. 
+#Frequency is the number of times the feauture is used in all generated trees
+
+## Improvements in the interpretability of feauture importance data table
+
+#importanceRAW<-xgb.importance(feauture_name=sparse_matrix@Dimnames[[2]], model=bst_linear, data=sparse_matrix, label=output_vector)
+
+#clean for better display
+#importanceCLEAN<-importanceRAW[,":="(Cover=NULL, Frequency=NULL)]
+
+#head(importanceCLEAN)
+#head(importance)
+
+
+```
+
+
+
+
 
 
 # **Predicting Birthright for Babies**
