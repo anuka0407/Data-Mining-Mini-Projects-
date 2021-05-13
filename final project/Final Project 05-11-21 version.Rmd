@@ -2,10 +2,7 @@
 title: "Data Mining Final Project"
 author: "Anuka Revi and Maria Gilbert"
 date: "5/13/2021"
-output: 
-  pdf_document:
-    includes:
-      in_header: my_header.tex
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -144,7 +141,8 @@ In our initial exploration of the data, we evaluated the correlations between al
 
 ```{r}
 #load data 
-birthweight_new <- read.csv("~/Downloads/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
+birthweight_new <- read.csv("~/GitHub/datamining_hw/final project/birthweight_new.csv", stringsAsFactors=TRUE, header=TRUE)
+
 ### Create list of columns with missing values
 na99<-c("combgest", "apgar5", "wtgain", "m_ht_in",
         "previs", "illb_r11", "priorterm", "priorlive", "fagecomb")
@@ -339,7 +337,7 @@ The x-axis labels for Mother Education Level have been abbreviated for readabili
 - "Mast" = Master's degree
 - "PhD" = Doctorate (PhD, EdD) or professional degree
 
-Now, we want to look at the relationships between some of these variables and the birth weight of the baby. Figure 5 shows some of these relationships, with LOESS (local regression) trend lines. The vertical black lines show the mean values within our data of weeks of gestation, weight gain, pre-pregnancy weight, and height.
+Now, we want to look at the relationships between some of these variables and the birth weight of the baby. Figure 5 shows some of these relationships, with LOESS (local regression) trend lines. 
 
 ```{r,include=TRUE,fig.cap="Maternal health history and birth weight",fig.height=8}
 g1=ggplot(data=week37to40, aes(x=as.factor(combined_gestation), y=birth_weight))+geom_boxplot(color="black",fill="grey")+ggtitle("Weeks of gestation")+xlab("Weeks of gestation")+ylab("Birth weight (grams)")+scale_y_continuous(breaks=seq(1000,6000,500))
@@ -433,7 +431,7 @@ We were interested in creating models that would predict two different outcomes.
 
 \
 
-## **Part A: Models to Predict Whether Baby Will be Above or Below Average Weight
+## **Part A: Models to Predict Whether Baby Will be Above or Below Average Weight**
 
 In order to predict whether a baby would be born with a low weight, normal weight, or high weight, we created two xgboost models. The first determined whether the baby would be low weight or not, and the second determined whether the baby would be high weight or not. The following shows the feature importance plot of the first xgboost model, which predicts whether or not a baby will be low weight. We calculated the test error of this model to be:
 
@@ -610,15 +608,14 @@ cbind2(coef.exact[which(coef.exact!=0)],coef.apprx[which(coef.apprx!=0)])
 
 The relative error improvement of our final lasso model over the random tree that we used to examine variable importance was 
 
-```{r,include=TRUE}
+```{r, include=TRUE}
 (err_forest - rmse.test)/err_forest
 ```
 
-Not a significant improvement, but both models do a decent job at predicting the birth weight given the information available before the birth.
 
 ## **Conclusion**
 
-We found that using only variables that would be known before a baby is born, it is possible to predict whether a baby will be low weight, normal weight, or high weight, and even to predict the actual numeric weight itself, all with modest to reasonable accuracy. This model could be used by doctors to supplement fetal weights estimated by ultrasound to get a more accurate guess for how much a baby will weigh at birth, and as a result, how likely it will be for the mother and/or baby to have complications during birth. 
+We found that using only variables that would be known before a baby is born, it is possible to predict whether a baby will be low weight, normal weight, or high weight, and even to predict the actual numeric weight itself, all with reasonable accuracy. This model could be used by doctors to supplement fetal weights estimated by ultrasound to get a more accurate guess for how much a baby will weigh at birth, and as a result, how likely it will be for the mother and/or baby to have complications during birth. 
 
 
 
