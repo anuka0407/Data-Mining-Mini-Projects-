@@ -27,3 +27,5 @@ randomForest
 gbm
 pdp
 hrbrthemes
+Matrix
+glmnet

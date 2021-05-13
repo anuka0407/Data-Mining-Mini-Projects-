@@ -1,495 +1,379 @@
-Data Mining Final Project
+Predicting Birth Weight for Babies
 ================
-Anuka Revi Maria Gilbert
-4/13/2021
+Anuka Revi & Maria Gilbert
+5/12/2021
 
-# **Part I**
+# **Abstract**
 
-\-**Preparation and pre-processing of the data:**
+Using data from the National Bureau of Economic Research on births in
+2018, we created a model that aims to predict a baby’s weight at birth,
+based on information that would be known prior to the baby being born.
 
-NBER has a collection of vital statistics birth microdata which contains
-birth certificate data from a given calendar year, in our case 2018. We
-chose appropriate variables for our analysis which included BMI, height,
-race and education of mother, as well as some pregnancy associated
-characteristics. Prior analysis, we converted categorical variables into
-factors and encoded them with the help of the codebook provided for this
-dataset. We replaced unknown variables that were coded as 99, 999, or
-9999 with NA values and renamed variables to make more intuitive for
-readers. Since we were interested in birthweight outcome, we decided to
-filter the data and focus on babies who were born on 37 to 40 weeks
-mark, since there is a causal relationship between week of gestation and
-the potential birthweight outcome. As we would expect, babies who are
-born at 37-40 weeks mark weigh more than premature babies.
-
-\-**Missing Data:**
-
-In our data *week37to40* we have 2134 missing values which is small
-compared to total 1159808 observed values, mother\_race contains 2061
-missing values and mothers education contains 73 missing values. Since
-NA values are than than 10% of our data set it makes sense to just
-eliminate them.
-
-\-**Visualizing birthright distribution**
-
-By visualizing the data, we see that there are some variables that are
-strongly related to one another, such as mother age with fathers age and
-BMI with pre-pregnancy weight. None of the variables are strongly
-correlated with birthright which is our variable of interest.
-
-``` r
-#histogram of baby weight for gestational weeks 37-40
-g <- ggplot(week37to40, aes(birth_weight)) + scale_fill_brewer(palette = "Spectral")
-
-g + geom_histogram(aes(fill=sex),
-                   binwidth = 200,
-                   col="black",
-                   
-) + labs(title="Histogram of Birthweight for gestational weeks 37 to 40",
-         subtitle="Birthweight and Sex of the infant")  + scale_x_continuous(name="Birthweight, in grams",breaks=seq(0,6000,500)) + scale_y_continuous(name="Number of births",breaks=seq(0,9000,1000))
-```
-
-![Birthweight
-Distriburion](Final_Project_MA_files/figure-gfm/unnamed-chunk-4-1.png)
-
-``` r
-#correlation for variables 
-num_cols <- unlist(lapply(week37to40, is.numeric))         # Identify numeric columns
-data_num <- week37to40[, num_cols]   
-data_num<-na.omit(data_num)
-
-
-corr<-cor(data_num,use="pairwise.complete.obs")%>%round(2)
-
-
-ggcorrplot(corr, hc.order = FALSE,
-           lab = TRUE, 
-           lab_size = 3,
-           method="square",
-           colors = c("tomato2", "white", "springgreen3"), 
-           title="Correlogram of birthweight variables", 
-           ggtheme=theme_bw)
-```
-
-![Birthweight
-Distriburion](Final_Project_MA_files/figure-gfm/unnamed-chunk-4-2.png)
-
-``` r
-#summary(birthweight_new)
-
-
-
- 
-#skim(birthweight_new)
-```
-
-\-**Random Forest and XGBOOST**
-
-Although the correlations are giving a good overview of the most
-important numeric variables and multicolinerity among those variables, I
-wanted to get an overview of the most important variables including the
-categorical variables before moving on to visualization. Random Forest
-allows us to find the variable importance without much effort or
-parameter tuning but slightly longer than desired time. As we would
-expect some of the most important variables are combined\_gestation,
-weight gain during pregnancy, pre-pregnancy weight, mother’s BMI and
-height, as well as mother’s race & age, prior live birth and sex of the
-baby. RMSE of Random Forest model was 408.2254.
-
-We also included the distribution of some of the most important
-variables in determining the birthweight. Visualizing relationships
-between birth\_weight and three most important variables - weight gain,
-mother’s height in inches and mothers age we see non-linear
-relationships. This made us speculate that non linear model might be a
-best predictor for birth weight as numerical value so we decided to
-employ KNN model.
-
-``` r
-##Random Forest 
-set.seed(1234)
-week37to40_split = initial_split(week37to40)
-n = nrow(week37to40)
-n_train = floor(0.8*n)
-n_test = n - n_train
-train_cases = sample.int(n, size=n_train, replace=FALSE)
-week37to40_train = training(week37to40_split)
-week37to40_test = testing(week37to40_split)
-
-
-
-forest1 = randomForest(birth_weight ~ . - X - breastfed - under_37weeks - apgar5 - birth_time, distribution="gaussian",data=week37to40_train, n.trees=100, importance=TRUE)
-
-imp_forest1<-importance(forest1)
-imp_DF <- data.frame(Variables = row.names(imp_forest1), MSE = imp_forest1[,1])
-imp_DF <- imp_DF[order(imp_DF$MSE, decreasing = TRUE),]
-
-ggplot(imp_DF[1:20,], aes(x=reorder(Variables, MSE), y=MSE, fill=MSE)) + geom_bar(stat = 'identity') + labs(x = 'Variables', y= '% increase MSE if variable is randomly permuted') + coord_flip() + theme(legend.position="none")
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
-
-``` r
-yhat_test = predict(forest1, week37to40_test)
-rmse(forest1,week37to40_test)
-```
-
-    ## [1] 408.2254
-
-``` r
-#1] 408.2254
-```
-
-\-*Graphs to visualize relationship between some of most important
-variables and birthweight*
-
-``` r
-library(hrbrthemes)
-
-
-s1=ggplot(week37to40, aes(x=combined_gestation)) + 
-    geom_density() +
-    theme_classic()+ labs(x='Combined Gestation')
-
-s2=ggplot(week37to40, aes(x=wtgain)) + 
-    geom_density() +
-    theme_classic()+ labs(x='Weightgain During Pregnancy')
-
-
-s3=ggplot(week37to40, aes(x=m_ht_in)) + 
-    geom_density() +
-    theme_classic()+ labs(x='Mother Height (Inches)')
-
-
-s4=ggplot(week37to40, aes(x=mother_age)) + 
-    geom_density() +
-    theme_classic()+ labs(x='Mother Age')
-
-
-s5=ggplot(data=week37to40, aes(x=as.factor(mother_race))) +
-        geom_histogram(stat='count') + labs(x='Mother Race')
-
-
-source("http://peterhaschke.com/Code/multiplot.R")
-multiplot(s1,s2,s3,s4,s5,cols=2)
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
-
-``` r
-g1<-ggplot(data=week37to40, aes(x=combined_gestation, y=birth_weight))+
-        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black") 
-        
-g2<-ggplot(data=week37to40, aes(x=wtgain, y=birth_weight))+
-        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black") 
-      
-
-g3<-ggplot(data=week37to40, aes(x=prepreg_weight, y=birth_weight))+
-        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black")
-
-
-g4<-ggplot(data=week37to40, aes(x=m_ht_in, y=birth_weight))+
-        geom_point(col="dodgerblue") + geom_smooth(method = "lm", se=FALSE, color="black")
-
-
-source("http://peterhaschke.com/Code/multiplot.R")
-multiplot(g1,g2,g3,g4,cols=2)
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
-
-## *Worflow that wont be all included in our final md draft*
-
-We tried linear stepwise selection and Lasso glmnet models (*we have to
-briefly explain how each model works*), and used RMSE as our evaluation
-metrics on test set. Lasso glmnet gave us better prediction accuracy
-with lower RMSE value of 13.25.
-
-**Linear Model with Step Function**
-
-  - **Lasso with glmnet**
-
-<!-- end list -->
-
-``` r
-library(ISLR)
-library(glmnet)
-library(dplyr)
-library(tidyr)
-
-
-
-
-set.seed(1234)
-y_train<-week37to40_train_uncorr%>%select(birth_weight)%>%
-  unlist()%>%
-  as.numeric()
-
-y_test<-week37to40_test_uncorr%>%select(birth_weight)%>%
-  unlist()%>%
-  as.numeric()
-
-
-
-x_train<-week37to40_train_uncorr %>% 
-  data.matrix()
-
-x_test<-week37to40_test_uncorr %>%
-  data.matrix()
-
-
-
-grid<-10^seq(10,-2,length=100)
-  
-  
-#fit lasso model 
-lasso_mod<-glmnet(x_train, y_train, alpha=1, lambda=grid)
-
-plot(lasso_mod)  #draw plot of coefficients
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
-
-``` r
-set.seed(12)
-cv_fit<-cv.glmnet(x_train,y_train, alpha=1) #fit lasso on training data  #alpha=0 ->ridge model if 1 ->lasso model 
-
-
-plot(cv_fit) #DRaw plot of training MSE as a fucntio of lambda
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
-
-``` r
-opt_lambda<-cv_fit$lambda.min #select lambda that minimizes training mSE
-print(paste("best labda value is", opt_lambda))
-```
-
-    ## [1] "best labda value is 13.361621717586"
-
-``` r
-lasso_pred<-predict(lasso_mod, s=opt_lambda, newx=x_test) #use best lambda to predict test data
-
-rmse_test<-sqrt(mean((lasso_pred-y_test)^2))
-print(paste("Test RMSE is", rmse_test))
-```
-
-    ## [1] "Test RMSE is 13.2547256741035"
-
-``` r
-#IDK why i cant get variable importance please ask your brother 
-lassoVarImp <- varImp(lasso_mod,lambda=opt_lambda, scale=F)
-lassoImportance <- lassoVarImp$importance
-
-varsSelected <- length(which(lassoImportance$Overall!=0))
-varsNotSelected <- length(which(lassoImportance$Overall==0))
-
-cat('Lasso uses', varsSelected, 'variables in its model, and did not select', varsNotSelected, 'variables.')
-```
-
-    ## Lasso uses 0 variables in its model, and did not select 0 variables.
-
-\*\*XGBOOST model for regression"
-
-First objective was to predict exact birth weight for babies who are
-born at 37 to 40 weeks gestation mark (which is counted as full term
-pregnancy). Lasso model and tree models did that with higher accuracy
-that step wise selection of OLS model,
-
-The second goal was to predict whether babies born from 37 to 40 weeks
-of gestation were underweight or not. For this binary outcome model we
-used Xgboost that gave us low accuracy.
-
-``` r
-#Conversion from categorical to numerical values - one hot encoding
-
-# 1. create new categorical variable fro moms age that are greater than 35 ( high risk pregnancy)
-# 2. babies that are underweight VS not underweight
-# 3. Grouping per 5 years  so that algorithm treats that as independent values thus 20 is not closer to 30 than 60. thus distance between ages is lost in this transformation
-
-week37to40_new<-week37to40%>%
-  mutate(underweight=as.factor(ifelse(birth_weight<2500, "underweight", "not underweight")),
-         agediscrete=as.factor(round(mother_age/10,0)),
-         risk=as.factor(ifelse(mother_age>35, "high risk", "low risk")))
-
-
-
-#remove X because there is nothing to learn from X that stands as ID 
-
-week37to40_new$X<-NULL
-
-#train test split with caret 
-set.seed(123)
-
-week37to40_new_split = initial_split(week37to40_new)
-nrow = nrow(week37to40_new)
-n_train_new = floor(0.8*nrow)
-n_test_new = nrow - n_train_new
-train_cases = sample.int(nrow, size=n_train_new, replace=FALSE)
-week37to40_new_train = training(week37to40_new_split)
-week37to40_new_test = testing(week37to40_new_split)
-
-
-#unlinke GLM that assumes that feautures are uncorrelated in order to predict more accurate outcomes. decision tree algorithms including boosted trees are robust to these feautures. thus we do nothave to worry about correlated feautures!
-
-
-
- # **ONE HOT ENCODING***
-#transform categorical data to dummy variables (the purpose is to transform each value of the each categorical feauture into a binary feauture {0,1}.
-
-sparse_matrix<-sparse.model.matrix(underweight~.-1, data = week37to40_new_train)
-sparse_matrix_test<-sparse.model.matrix(underweight~.-1, data=week37to40_new_test)
-
-
-
-
-
-#create output numeric vector (not as a sparse matrix)
-output_vector=as.numeric(week37to40_new_train$underweight=="underweight")
-output_vector_test=as.numeric(week37to40_new_test$underweight=="underweight")
- 
-  ##build the model
-bst_boost<-xgboost(data=sparse_matrix, label=output_vector, max.depth=4, eta=0.2, nthread=2, nround=10, objective="binary:logistic")
-```
-
-    ## [00:34:38] WARNING: amalgamation/../src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
-    ## [1]  train-logloss:0.513065 
-    ## [2]  train-logloss:0.392122 
-    ## [3]  train-logloss:0.305390 
-    ## [4]  train-logloss:0.240795 
-    ## [5]  train-logloss:0.191574 
-    ## [6]  train-logloss:0.153371 
-    ## [7]  train-logloss:0.123356 
-    ## [8]  train-logloss:0.099602 
-    ## [9]  train-logloss:0.080660 
-    ## [10] train-logloss:0.065457
-
-``` r
-pred_boost<-predict(bst_boost, sparse_matrix_test)
-err_boost<-as.numeric(sum(as.integer(pred_boost>0.5)!=output_vector_test))/length(output_vector_test)
-print(paste("test-error=", err_boost))
-```
-
-    ## [1] "test-error= 0"
-
-``` r
- #feature importance looks weird
- 
-importance_boost<-xgb.importance(model=bst_boost)
-
-print(xgb.plot.importance(importance_matrix = importance_boost, top_n=10))
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
-
-    ##         Feature Gain Cover Frequency Importance
-    ## 1: birth_weight    1     1         1          1
-
-``` r
-###I think bst_ boost is NOT  done correctly for predicting whether we had uderweight or overweight coz it sounds too good to be true test_error of 0. 
-
- 
- #linear boosting
-dtrain<-xgb.DMatrix(data=sparse_matrix, label=output_vector)
-dtest<-xgb.DMatrix(data=sparse_matrix_test, label=output_vector_test)
-bst_linear<-xgb.train(data=dtrain, booster="gblinear", nthread=2, nrounds=2, objective="binary:logistic")
-
-pred<-predict(bst_linear, dtest)
-err<-as.numeric(sum(as.integer(pred>0.5)!=output_vector_test))/length(output_vector_test)
-print(paste("test-error=", err))
-```
-
-    ## [1] "test-error= 0.0255351681957187"
-
-``` r
- #feature importance 
- 
-importance<-xgb.importance(colnames(dtrain), model=bst_linear)
-
-print(xgb.plot.importance(importance_matrix = importance, top_n=10))
-```
-
-![](Final_Project_MA_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
-
-    ##                     Feature    Weight Importance
-    ##  1:                f_cigs_2 -0.702993  -0.702993
-    ##  2:          gest_diabetesU -0.351823  -0.351823
-    ##  3:            agediscrete5  0.296002   0.296002
-    ##  4:          labor_inducedU -0.277592  -0.277592
-    ##  5:        father_raceNHOPI -0.211190  -0.211190
-    ##  6: hypertension_eclampsiaU -0.175912  -0.175912
-    ##  7:             anesthesiaU -0.138796  -0.138796
-    ##  8:        mother_raceblack  0.138096   0.138096
-    ##  9:    hospitalNot Hospital -0.130089  -0.130089
-    ## 10:        ruptured_uterusY -0.126891  -0.126891
-
-``` r
-#gain is the improvement in  accuracy brought by a feauture to the branches it is on, thei ide is that before adding a new spolit there was a wrongly classifid elements after adding a split on ths feauture there are 2 new branches  and each of these branch is more accurate. 
-#Frequency is the number of times the feauture is used in all generated trees
-
-## Improvements in the interpretability of feauture importance data table
-
-#importanceRAW<-xgb.importance(feauture_name=sparse_matrix@Dimnames[[2]], model=bst_linear, data=sparse_matrix, label=output_vector)
-
-#clean for better display
-#importanceCLEAN<-importanceRAW[,":="(Cover=NULL, Frequency=NULL)]
-
-#head(importanceCLEAN)
-#head(importance)
-```
-
-# **Predicting Birthright for Babies**
-
-## **Abstract**
-
-summary of our questions, methods, results, and conclusions in a few 100
-words
-
-## **Introduction**
+# **Introduction**
 
 Baby announcements are sweet and memorable. Expecting parents usually
-know their approximate due date at the beginning of the pregnancy and
-learn about their baby’s gender at around 20 weeks mark. While gender
-reveal, time of birth and name of the new baby are all exciting and
-great news for the entire family to have, OB-GYNS mostly look at baby’s
-development, growth and their weight. Estimating baby weight in
-particular is very important, since a large size baby can pose serious
-injuries to the baby and its mother. Ultrasounds are often used to
-estimate baby’s weight, but they are not always accurate. When I was
-over 40 weeks pregnant, my doctor told me that the baby was an average
-size and I didnot need to be induced, however my daughter was born over
-8.9lbs which was significantly larger than the estimated size and it
-made my delivery more complicated. So While exploring my project ideas,
-I came across to the NBER natality birth data from 2018 that contained
-the features of the baby like birth date, gender, medical conditions of
-the birth mother, number of children born etc. My goal is to predict the
-birthright of the baby depending on the week of pregnancy. Better
-estimations used by doctors should mean easier deliveries and less
-complications and its interesting to see how machine learning tools
-could help us estimate the birthweight.
+know their approximate due date at the beginning of the pregnancy, and
+learn about their baby’s gender at around 20 weeks. While gender, time
+of birth, and name of the new baby are all exciting and great news for
+the entire family to have, pediatricians focus mostly on babies’
+development, growth, and weight. Estimating baby’s weight in particular
+is very important, since an unusually high birth weight can pose serious
+injuries to the baby and its mother, and an unusually low birth weight
+is associated with many pediatric health conditions. <bk><bk><bk>
+Ultrasounds are often used to estimate a baby’s weight prior to birth,
+but they are not always accurate. When I was over 40 weeks pregnant, my
+doctor told me that the baby was an average size and that I did not need
+to be induced. However, my daughter was born over 8.9 lbs which was
+significantly larger than the estimated size, and it made my delivery
+more complicated. <bk><bk><bk> We decided to use machine learning tools
+to estimate birth weight and found the NBER natality birth data from
+2018, which contains information about 50,000 births. Our goal is to
+predict the birth weight of a full-term baby (born at 37 to 42 weeks
+gestation mark). If we create the model that can be used by doctors to
+better estimate baby’s weight at birth, it can make deliveries easier,
+reduce complications, maybe even decrease the rate of maternal mortality
+as well as eliminate the need to have freqeunt sonograms.
 
-## **Methods**
+# **Data Processing & Exploration**
 
-My dataset birthweight18.csv contains 50000 randomly chosen samples from
-2018 U.S. data files
-(<https://www.nber.org/research/data/vital-statistics-natality-birth-data>).
-There are 42 variables that were chosen from the initial 142 variables
-on the dataset.
-
-## **Data Exploration**
-
-## **Results**
-
-tables figs and texst that illustrate your findings. (4 -6 figures and
-tables do not incuudefog or table if you do not discuss it in a text)
-
-## **Conclusion**
-
-interpret what you founds, man lessons we should take away from your
-report
-
-## **Appendix**
-
-optional. any details figs
+Our data set contains 50,000 randomly chosen samples from 2018 U.S.
+birth certificate data
+(<https://www.nber.org/research/data/vital-statistics-natality-birth-data>),
+with 42 variables:
 
 -----
 
-\#\#\#Data Worfklow
+  - X: a unique identifier
+  - birth\_month: an integer from 1 to 12, indicating the month of the
+    birth
+  - birth\_time: an integer from 0 to 2359, indicating the time of birth
+  - sex: a factor with two levels, for male and female
+  - birth\_weight: the birth weight (in grams). This is the variable we
+    are hoping to estimate
+  - mother\_age: an integer indicating the age (in years) of the mother
+  - mother\_birthplace: a factor with three levels, indicating the
+    mother was born inside the U.S., outside the U.S., or if this is
+    unknown
+  - hospital: a factor with three levels, indicating whether the baby
+    was born in a hospital or not, or if this is unknown
+  - mother\_race: a factor with six levels, indicating whether the race
+    of the mother is white, black, American Indian/Alaskan Native,
+    Asian, Native Hawaiian and other Pacific Islander, or mixed race
+  - mother\_maritalstatus: a factor with three levels, indicating
+    whether the mother is married, unmarried, or if this is unknown
+  - mother\_education: a factor with eight levels, indicating the level
+    of education of the mother, categorized into 8th grade or less, 9th
+    to 12th grade with no diploma, high school graduate or equivalent,
+    some college but no degree, associate degree, bachelor’s degree,
+    master’s degree, or doctorate/professional degree
+  - father\_combinedage: an integer indicating the age (in years) of the
+    father
+  - father\_race: a factor with six levels, indicating whether the race
+    of the father is white, black, American Indian/Alaskan Native,
+    Asian, Native Hawaiian and other Pacific Islander, or mixed race
+  - father\_education: a factor with eight levels, indicating the level
+    of education of the father, categorized into 8th grade or less, 9th
+    to 12th grade with no diploma, high school graduate or equivalent,
+    some college but no degree, associate degree, bachelor’s degree,
+    master’s degree, or doctorate/professional degree
+  - priorlive: an integer indicating the number of prior live births the
+    mother has had
+  - priorterm: an integer indicating the number of prior term births the
+    mother has had
+  - time\_sincelastbirth: a factor indicating whether the mother’s last
+    birth occurred less than 18 months before the current birth, 18
+    months to under 2 years before the current birth, 2 years to under 4
+    years before the current birth, 4 years to under 6 years before the
+    current birth, greater than 6 years before the current birth, or
+    whether this is N/A or unknown
+  - prenatal\_visits: an integer indicating the number of prenatal care
+    visits
+  - wic: a factor indicating whether the mother participates in WIC
+    (Special Supplemental Nutrition Program for Women, Infants, and
+    Children) or not, or whether this is unknown
+  - f\_cigs\_1: a factor indicating whether the mother smoked during the
+    first trimester
+  - f\_cigs\_2: a factor indicating whether the mother smoked during the
+    second trimester
+  - f\_cigs\_3: a factor indicating whether the mother smoked during the
+    third trimester
+  - m\_ht\_in: an integer indicating the height (in inches) of the
+    mother
+  - bmi: the BMI (Body Mass Index) of the mother
+  - prepreg\_weight: an integer indicating the weight (in pounds) of the
+    mother before the current pregnancy
+  - wtgain: an integer indicating the amount of weight (in pounds) the
+    mother gained throughout the pregnancy
+  - gest\_diabetes: a factor indicating whether the mother has
+    gestational diabetes or not, or if this is unknown
+  - hypertension\_eclampsia: a factor indicating whether the mother has
+    hypertension eclampsia, or if this is unknown
+  - infertility\_treatment: a factor indicating whether the mother
+    underwent fertility treatment for the current pregnancy, or if this
+    is unknown
+  - previous\_cesarian: a factor indicating whether the mother has
+    previously given birth via Cesarian section, or if this is unknown
+  - no\_infections: a factor indicating whether the mother has any
+    infections
+  - labor\_induced: a factor indicating whether the labor was induced or
+    not, or if this is unknown
+  - anesthesia: a factor indicating whether the mother was given
+    anesthesia for the birth or not, or whether this is unknown
+  - delivery\_method: a factor indicating whether the birth was vaginal,
+    C-section, or if this is unknown
+  - ruptured\_uterus: a factor indicating whether the mother experienced
+    uterine rupture during birth or not, or if this is unknown
+  - perineal\_laceration: a factor indicating whether the mother
+    experienced perineal lacerations (known commonly as vaginal tears)
+    during the birth or not, or if this is unknown
+  - attend: a factor indicating whether the birth was attended by a
+    medical doctor, a midwife, or if this is unknown
+  - apgar5: a integer indicating the baby’s APGAR (Appearance, Pulse,
+    Grimace, Acitivty, and Respiration) score five minutes after birth.
+    This score is used as a summary of the baby’s overall health and is
+    used to determine whether the baby needs medical attention. It is an
+    integer ranging from 0 to 10, with 0 being an emergency and 10 being
+    ideal
+  - plurality: a factor indicating whether or not the birth was a
+    multiple birth
+  - combined\_gestation: an integer indicating which week of gestation
+    the baby was born at
+  - breastfed: a factor indicating whether the baby was breastfed after
+    birth or not, or if this is unknown
+
+-----
+
+Many of these variables will not be relevant in our models, because of
+the way that they might be caused by the birth weight, or emerge after
+the birth weight would already be known. We will be excluding breastfed
+and apgar5 because these emerge after the birth has already occurred. We
+will also be excluding perineal\_laceration, ruptured\_uterus,
+delivery\_method, and hypertension\_eclampsia, since these emerge during
+birth, and are influenced by the weight of the baby. Finally, since we
+were interested in birthweight outcome, we decided to filter the data
+and focus on babies who were born on 37 to 40 weeks mark,this way we can
+control for the fact that pre-term births nearly always have low birth
+weight. we will be excluding all data on plural births, as well as
+pre-term births.
+
+We converted categorical variables into factors and re-coded them in
+accordance with the code book provided by NBER. We also replaced unknown
+variables that were coded as 99, 999, or 9999 with NA values and renamed
+variables more intuitively for readers. In our processed data
+*week37to40* we have 2,134 missing values out of the total 1 159 808
+observed values. The variable *mother\_race* contains 2,061 missing
+values and *mother\_education* contains 73 missing values. Since NA
+values are less than 10% of our data set we decided to just remove them.
+Additionally, we had eliminated time\_sincelastbirth due to having
+mostly NA values in the original data set as well as having no relevance
+to birth weight outcome. Processed dataset we will be using has 26162
+observations and 41 variables.
+
+In our initial exploration of the data, we look at correlation between
+all numeric variables. As we can see, f\_cigs\_1, f\_cigs\_2, and
+f\_cigs\_3 all have the same correlations with the other variables. The
+strongest correlations with birth weight are weeks of gestation (even
+with pre-term births filtered out\!), weight gain, pre-pregnancy weight,
+BMI of the mother, and the height of the mother, all having a positive
+correlation with birth weight.
+
+<div class="figure">
+
+<img src="Final_Project_MA_files/figure-gfm/unnamed-chunk-4-1.png" alt="Correlation Plot" width="70%" />
+
+<p class="caption">
+
+Correlation Plot
+
+</p>
+
+</div>
+
+Next, we aimed to examine the distributions of some of our variables.
+The following figure shows the distribution of actual birth weights from
+our data. Birth weight is normally distributed with mean of 3366 grams
+(3.4kgs) with standard deviation of 457grams, average weight of girls is
+slightly lower (3301 grams) compared to boys (3428grams).
+
+Figure 3 shows distributions of selected variables within our data
+relating to mother’s characteristics (height, weight, education\[1\],
+race) and medical history (number of prenatal care visits, weight gain
+during pregnancy and pre-pregnancy weight). Exploring variable
+distribution it is important to note that we have predominantly white
+female sample, which could be problematic for developing birthweight
+prediction model that would perform as well for other races as for white
+females.
+
+![](Final_Project_MA_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+
+Now, we want to look at the relationships between some of these
+variables and the birth weight of the baby. Figure 4 shows some of these
+relationships, with LOESS (local regression) trend lines. Relationship
+between weeks of gestation and birth weight is positive as expected,
+also mothers who are taller than average height in our sample (64
+inches) tend to have babies with higher birth weight. Mothers who weigh
+more than average (160 lbs) prior pregnancy do not necessarily have
+babies with higher birth weight (Relationship between pre-pregnancy
+weight and birth weight of the baby is not clear).
+
+![](Final_Project_MA_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+# **Methods and Results**
+
+Although the correlations provided a comprehensive overview of the most
+important **numeric variables** and multicollinearity among them, we
+also used a random forest model to get an overview that would include
+the categorical variables. A random forest model works by creating a
+multitude of decision trees and selecting the mean training value at
+each node. This method allows us to find the variable importance without
+much effort or parameter tuning. As we would expect, some of the most
+important variables are combined\_gestation, wtgain, prepreg\_weight,
+mother’s bmi, height, race, age, prior live births, and sex of the baby.
+Figure 5 shows the variable importance plot that resulted from our
+random forest.
+
+![](Final_Project_MA_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+<bk><bk><bk>
+
+The RMSE of this random forest model is:
+
+-----
+
+## \*\*Part A: Model to Predict Whether Baby Will be Above or Below Average Weight
+
+In this part of the project we are interested whether the baby is born
+with a low weight (under 2,500 grams or 5.5 pounds), a high weight (over
+4,000 grams or 8.8 pounds), or a normal weight (2,500 to 4,000 grams).
+
+We created two xgboost models that perfomred best. The first determined
+whether the baby would be low weight or not, and the second determined
+whether the baby would be high weight or not. The following shows the
+feature importance plot of the first xgboost model, which predicts
+whether or not a baby will be low weight. We calculated the test error
+of this model to be:
+
+    ## [1] "Test error =  0.0255351681957187"
+
+This means that about 97.5% of the time, this model is correct in
+predicting whether or not a baby will be born with a low weight. Figure
+7 shows the feature importance of this model.
+
+![](Final_Project_MA_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+
+    ##                Feature       Gain       Cover  Frequency Importance
+    ##  1: combined_gestation 0.47656694 0.485118110 0.15107914 0.47656694
+    ##  2:             wtgain 0.13450278 0.166447001 0.20863309 0.13450278
+    ##  3:     prepreg_weight 0.07881839 0.116686405 0.14388489 0.07881839
+    ##  4:                bmi 0.07118682 0.068074787 0.10791367 0.07118682
+    ##  5:         mother_age 0.05872167 0.050693153 0.09352518 0.05872167
+    ##  6:   mother_raceblack 0.03432288 0.009720851 0.02158273 0.03432288
+    ##  7:    prenatal_visits 0.03177786 0.023080345 0.06474820 0.03177786
+    ##  8:               sexF 0.03171858 0.029585526 0.02877698 0.03171858
+    ##  9: father_combinedage 0.03130925 0.029814649 0.07194245 0.03130925
+    ## 10:            m_ht_in 0.01867703 0.004615495 0.02158273 0.01867703
+
+We created a similar model to predict if baby will be born with a high
+weight, and calculated the test error of this model to be:
+
+    ## [1] "Test Error =  0.0830275229357798"
+
+This means that about 91.7% of the time, this model is correct in
+predicting whether or not a baby will be born with a high weight. Figure
+8 shows the feature importance of this model.
+
+![](Final_Project_MA_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+
+    ##                Feature        Gain       Cover  Frequency  Importance
+    ##  1:     prepreg_weight 0.310133847 0.366469487 0.17687075 0.310133847
+    ##  2:             wtgain 0.277613573 0.254670402 0.25850340 0.277613573
+    ##  3: combined_gestation 0.131629444 0.143218862 0.17687075 0.131629444
+    ##  4:               sexF 0.093856125 0.084674986 0.10204082 0.093856125
+    ##  5:          priorlive 0.061552796 0.044200680 0.06802721 0.061552796
+    ##  6:   mother_raceblack 0.039844964 0.036247390 0.03401361 0.039844964
+    ##  7:            m_ht_in 0.028459579 0.019127682 0.02721088 0.028459579
+    ##  8: father_combinedage 0.020487275 0.014856487 0.03401361 0.020487275
+    ##  9:     gest_diabetesY 0.014823729 0.010016019 0.02040816 0.014823729
+    ## 10:         mother_age 0.007995638 0.008758393 0.03401361 0.007995638
+
+While weeks of gestation is the most important feature in telling
+whether the baby will be born with low weight (even considering only
+full term births), pre-pregnancy weight and pregnancy weight gain are
+the most important in telling whether the baby will be overweight. We
+can tell from this that there are some factors that are more important
+at the lower end of the spectrum of birth weight than those that are
+more important at the higher end of the spectrum.
+
+-----
+
+## **Part B: Predicting Actual Birth Weight in Grams**
+
+Now, our last model aims to predict the actual birth weight in grams. We
+tried several different types of models, but the two with the highest
+accuracy were lasso and step, with their accuracy levels being virtually
+identical. A lasso (Least Absolute Shrinkage and Selection Operator)
+model is from an algorithm that performs variable selection and
+regularization and then results in a regression model. A step model is
+from an algorithm that starts with a basic linear regression model and
+tests iterations with different interactions between the variables until
+it finds the optimal linear model. Because these models are similar in
+how they work, it is not surprising that we found similar RMSE (root
+mean squared error) in both of them.
+
+RMSE of Step model is:
+
+    ## [1] "Test RMSE is 405.861470827134"
+
+The relative error improvement of our final lasso model over the random
+tree that we used to examine variable importance was 3 point, which is
+relatively small.
+
+RMSE of Lasso model is:
+
+Coefficients of variables that determine the final outcome - birth
+weight are:
+
+    ##                [,1]          [,2]
+    ##  [1,] -3972.7281771 -3972.7281771
+    ##  [2,]    -0.4909403    -0.4909403
+    ##  [3,]     9.3263438     9.3263438
+    ##  [4,]    35.1952435    35.1952435
+    ##  [5,]    -7.0222330    -7.0222330
+    ##  [6,]     4.3151617     4.3151617
+    ##  [7,]    38.6931131    38.6931131
+    ##  [8,]    25.2570656    25.2570656
+    ##  [9,]    13.7271988    13.7271988
+    ## [10,]     6.5524002     6.5524002
+    ## [11,]    53.2357099    53.2357099
+    ## [12,]     6.7235315     6.7235315
+    ## [13,]   119.6188659   119.6188659
+    ## [14,]   124.9398050   124.9398050
+    ## [15,]    75.8611429    75.8611429
+    ## [16,]  -121.2322134  -121.2322134
+    ## [17,]   -61.0250593   -61.0250593
+    ## [18,]    -7.2667748    -7.2667748
+    ## [19,]   -13.1173055   -13.1173055
+    ## [20,]    24.5326677    24.5326677
+    ## [21,]    -5.6004728    -5.6004728
+    ## [22,]     6.5868892     6.5868892
+    ## [23,]    53.6843870    53.6843870
+    ## [24,]   103.1686516   103.1686516
+    ## [25,]    22.2538902    22.2538902
+
+# **Conclusion**
+
+We found that using only variables that would be known before a baby is
+born, it is possible to predict whether a baby will be low weight,
+normal weight, or high weight, and even to predict the actual numeric
+weight itself, all with reasonable accuracy. This model could be used by
+doctors to supplement fetal weights estimated by ultrasound to get a
+more accurate guess for how much a baby will weigh at birth, and as a
+result, how likely it will be for the mother and/or baby to have
+complications during birth.
+
+1.  The x-axis labels for Mother Education Level have been abbreviated
+    for readability. - “1-8” = up to 8th grade - “some” = some high
+    school but no diploma - “HS” = high school diploma or equivalent
+    (e.g., GED) - “some” = some college but no degree - “Assoc” =
+    Associate degree - “Bach” = Bachelor’s degree - “Mast” = Master’s
+    degree - “PhD” = Doctorate (PhD, EdD) or professional degree
